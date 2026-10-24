@@ -1,0 +1,17 @@
+server:
+  port: 8080
+spring:
+  datasource:
+   # url: ${DB_URL:jdbc:postgresql://localhost:5432/fertilizer_db}
+    url: ${DB_URL:jdbc:postgresql://ep-bitter-fog-a1jdxyp2-pooler.ap-southeast-1.aws.neon.tech:5432/neondb}
+    username: ${DB_USERNAME:neondb_owner}
+    password: ${DB_PASSWORD}
+    hikari:
+      schema: NF
+
+  flyway:
+    enabled: true
+    default-schema: NF
+    schemas: NF
+    create-schemas: false
+    locations: classpath:db/migration
