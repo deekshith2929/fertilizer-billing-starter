@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import AdminPage from './pages/AdminPage.jsx';
+import SearchableProductSelect from './components/SearchableProductSelect.jsx';
 import ProductsPage from './pages/ProductsPage.jsx';
 import StockPage from './pages/StockPage.jsx';
 import {API_BASE_URL} from './api.js';
@@ -14,10 +15,11 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([emptyRow(1)]);
   const [nextId, setNextId] = useState(2);
+  const [focusProductRowId, setFocusProductRowId] = useState(1);
   const [bill, setBill] = useState(null);
   const [page, setPage] = useState('billing');
-  const [type, setType] = useState('CASH');
-  const [destination, setDestination] = useState('');
+  const [type, setType] = useState(() => sessionStorage.getItem('billing.billType') || 'CASH');
+  const [destination, setDestination] = useState(() => sessionStorage.getItem('billing.destination') || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState('');
@@ -45,6 +47,8 @@ export default function App() {
 
   function selectProduct(rowId, productId) {
     const product = products.find(item => String(item.id) === productId);
+    const selectedRowIndex = rows.findIndex(row => row.id === rowId);
+    const isTrailingEmptyRow = selectedRowIndex === rows.length - 1 && !rows[selectedRowIndex]?.productId;
     setRows(current => {
       let updated = current.map(row => row.id === rowId
         ? {...row, productId, productName: '', hsnCode: '', bagSizeKg: '50', gstRate: '5',
@@ -56,7 +60,29 @@ export default function App() {
       if (!updated.length) updated = [emptyRow(nextId)];
       return updated;
     });
-    if (productId) setNextId(id => id + 1);
+    if (productId) {
+      setNextId(id => id + 1);
+      setFocusProductRowId(isTrailingEmptyRow ? nextId : rows[rows.length - 1]?.id ?? null);
+    } else {
+      setFocusProductRowId(null);
+    }
+    setBill(null);
+  }
+
+  function duplicateRow(rowId) {
+    const rowIndex = rows.findIndex(row => row.id === rowId);
+    if (rowIndex < 0 || !rows[rowIndex].productId) return;
+    const duplicateId = nextId;
+    const emptyId = nextId + 1;
+    const duplicate = {...rows[rowIndex], id: duplicateId};
+    setRows(current => [
+      ...current.slice(0, rowIndex + 1),
+      duplicate,
+      ...current.slice(rowIndex + 1).filter(row => row.productId),
+      emptyRow(emptyId)
+    ]);
+    setNextId(nextId + 2);
+    setFocusProductRowId(duplicateId);
     setBill(null);
   }
 
@@ -67,6 +93,7 @@ export default function App() {
       return [...filled, emptyRow(nextId)];
     });
     setNextId(id => id + 1);
+    setFocusProductRowId(nextId);
     setBill(null);
   }
 
@@ -130,8 +157,13 @@ export default function App() {
     finally { setLoading(false); }
   }
 
+  const productOptions = [
+    ...products.map(item => ({value: String(item.id), label: item.productName})),
+    {value: CUSTOM_PRODUCT, label: 'Other / enter manually…'}
+  ];
+
   if (!user) return <main className="login-shell"><form className="login-card" onSubmit={login}>
-    <h1>Fertilizer Billing</h1><p>Sign in with your account</p>
+    <h1>Agri Dealer Hub</h1><p>Sign in with your account</p>
     <label>Username<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)}/></label>
     <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}/></label>
     {error && <p className="error-message">{error}</p>}
@@ -140,7 +172,7 @@ export default function App() {
   </form></main>;
 
   return <div className="app-shell">
-    <header className="app-header"><div><strong>Fertilizer Billing</strong><small>{user.dealerName} · {user.fullName}</small></div><button className="quiet-button" onClick={logout}>Logout</button></header>
+    <header className="app-header"><div><strong>Agri Dealer Hub</strong><small>{user.dealerName} · {user.fullName}</small></div><button className="quiet-button" onClick={logout}>Logout</button></header>
     <nav className="app-nav"><button className={page === 'billing' ? 'active' : ''} onClick={() => setPage('billing')}>Billing</button>{['ADMIN', 'DEALER'].includes(user.role) && <button className={page === 'products' ? 'active' : ''} onClick={() => setPage('products')}>Products</button>}{['ADMIN', 'DEALER'].includes(user.role) ? <button className={page === 'stock' ? 'active' : ''} onClick={() => setPage('stock')}>Stock Report</button> : <span>Stock Report <em>Coming later</em></span>}<span>Company / Dealer Ledger <em>Coming later</em></span><span>Farmer / Customer Ledger <em>Coming later</em></span>{user.role === 'ADMIN' && <button className={page === 'admin' ? 'active' : ''} onClick={() => setPage('admin')}>Admin</button>}</nav>
 
     {page === 'admin' && user.role === 'ADMIN'
@@ -155,8 +187,8 @@ export default function App() {
         <div className="panel-heading"><span className="eyebrow">RUNTIME BILLING</span><h1>GST Billing Calculator</h1><p>Choose products and quantities. Default prices are fetched from the backend and can be overridden for this bill only.</p></div>
         <form onSubmit={calculate}>
           <div className="form-grid">
-            <label>Bill type<select value={type} onChange={e => setType(e.target.value)}><option value="CASH">Cash Bill</option><option value="CREDIT">Credit Bill</option></select></label>
-            <label>Customer state code <input value={destination} onChange={e => setDestination(e.target.value)} maxLength={2} placeholder={`Default: ${user.stateCode || 'dealer state'}`}/></label>
+            <label>Bill type<select value={type} onChange={e => {setType(e.target.value); sessionStorage.setItem('billing.billType', e.target.value);}}><option value="CASH">Cash Bill</option><option value="CREDIT">Credit Bill</option></select></label>
+            <label>Customer state code <input value={destination} onChange={e => {setDestination(e.target.value); sessionStorage.setItem('billing.destination', e.target.value);}} maxLength={2} placeholder={`Default: ${user.stateCode || 'dealer state'}`}/></label>
           </div>
           <div className="item-list-heading"><h2>Bill items</h2><span>{activeRows.length} selected</span></div>
           <div className="billing-columns"><span>Product</span><span>Price incl. GST (₹)</span><span>Bags</span><span>Weight (kg)</span><span></span></div>
@@ -165,15 +197,19 @@ export default function App() {
             const customProduct = row.productId === CUSTOM_PRODUCT;
             const selectedProduct = product || (customProduct ? row : null);
             return <div className={`billing-row ${!row.productId ? 'empty-row' : ''}`} key={row.id}>
-              <select aria-label={`Product ${index + 1}`} value={row.productId} onChange={e => selectProduct(row.id, e.target.value)}>
-                <option value="">{index === 0 ? 'Select product…' : 'Add next product…'}</option>
-                {products.map(item => <option key={item.id} value={item.id}>{item.productName}</option>)}
-                <option value={CUSTOM_PRODUCT}>Other / enter manually…</option>
-              </select>
+              <SearchableProductSelect
+                options={productOptions}
+                value={row.productId}
+                onChange={value => selectProduct(row.id, value)}
+                placeholder={index === 0 ? 'Search products…' : 'Add next product…'}
+                ariaLabel={`Product ${index + 1}`}
+                autoFocus={row.id === focusProductRowId}
+                onRemoveShortcut={() => removeRow(row.id)}
+              />
               <input aria-label="Price including GST" type="number" min="0.01" step="0.01" value={row.price} disabled={!selectedProduct} placeholder="Auto price" onChange={e => updateRow(row.id, {price: e.target.value})}/>
               <input aria-label="Number of bags" type="number" min="1" step="1" value={row.bags} disabled={!selectedProduct} placeholder="Bags" onChange={e => updateRow(row.id, {bags: e.target.value})}/>
               <div className="weight-cell">{selectedProduct && row.bags ? money(Number(selectedProduct.bagSizeKg) * Number(row.bags)) : '—'}</div>
-              {selectedProduct ? <button type="button" className="remove-button" aria-label="Remove item" onClick={() => removeRow(row.id)}>×</button> : <span/>}
+              {selectedProduct ? <div className="billing-row-actions"><button type="button" className="duplicate-button" aria-label={`Duplicate ${selectedProduct.productName || 'custom product'}`} onClick={() => duplicateRow(row.id)}>+</button><button type="button" className="remove-button" aria-label="Remove item" onClick={() => removeRow(row.id)}>×</button></div> : <span/>}
               {product && <small className="product-meta">HSN {product.hsnCode} · {product.bagSizeKg} kg/bag · GST {product.gstRate}% · default ₹{money(product.defaultPriceInclGst)}</small>}
               {customProduct && <>
                 <label className="custom-product-name">Product name<input aria-label="Custom product name" value={row.productName} onChange={e => updateRow(row.id, {productName: e.target.value})} maxLength={200} placeholder="Type product name"/></label>

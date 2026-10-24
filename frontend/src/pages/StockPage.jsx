@@ -1,9 +1,9 @@
 import React, {useEffect, useState} from 'react';
+import SearchableProductSelect from '../components/SearchableProductSelect.jsx';
 import {API_BASE_URL} from '../api.js';
 
 const API = API_BASE_URL;
 const CUSTOM_PRODUCT = '__custom__';
-const LICENSE_NUMBER = 'CTR/33/ADA/FR/2018/22565';
 const AUTHORIZED_IMAGE_OPTIONS = [
   {id: 'stamp', label: 'Stamp image'},
   {id: 'signature', label: 'Signature image'},
@@ -18,6 +18,28 @@ const formatDate = value => {
   const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;
 };
+const localDateValue = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+function previousReportStorageKey(dealerId) {
+  return `stock.previousReport.${dealerId}`;
+}
+
+function loadPreviousReport(dealerId) {
+  const saved = sessionStorage.getItem(previousReportStorageKey(dealerId));
+  if (!saved) return null;
+  try {
+    const previous = JSON.parse(saved);
+    if (!previous || !['Fertilizer', 'Pesticide'].includes(previous.reportType)
+      || typeof previous.fromDate !== 'string' || typeof previous.toDate !== 'string'
+      || previous.dealerId !== String(dealerId) || !Array.isArray(previous.rows))
+      throw new Error('Saved stock report has an invalid format.');
+    return previous;
+  } catch (error) {
+    sessionStorage.removeItem(previousReportStorageKey(dealerId));
+    console.warn('Ignoring invalid saved stock report shortcut.', error);
+    return null;
+  }
+}
 
 async function readAuthorizedImage(file) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
@@ -36,12 +58,14 @@ export default function StockPage({user}) {
   const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([emptyRow(1)]);
   const [nextId, setNextId] = useState(2);
+  const [focusProductRowId, setFocusProductRowId] = useState(1);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [stampRequired, setStampRequired] = useState('No');
   const [authorizedSelection, setAuthorizedSelection] = useState(emptyAuthorizedSelection);
   const [authorizedImages, setAuthorizedImages] = useState({stamp: null, signature: null, combined: null});
   const [report, setReport] = useState(null);
+  const [previousReport, setPreviousReport] = useState(() => loadPreviousReport(user.dealerId));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,6 +74,7 @@ export default function StockPage({user}) {
     setProducts([]);
     setRows([emptyRow(1)]);
     setNextId(2);
+    setFocusProductRowId(1);
     setReport(null);
     setError('');
     setLoading(true);
@@ -92,7 +117,24 @@ export default function StockPage({user}) {
       if (!next.length) next = [emptyRow(nextId)];
       return next;
     });
-    if (productId) setNextId(id => id + 1);
+    if (productId) {
+      const selectedRowIndex = rows.findIndex(row => row.id === rowId);
+      const isTrailingEmptyRow = selectedRowIndex === rows.length - 1 && !rows[selectedRowIndex]?.productId;
+      setNextId(id => id + 1);
+      setFocusProductRowId(isTrailingEmptyRow ? nextId : rows[rows.length - 1]?.id ?? null);
+    } else {
+      setFocusProductRowId(null);
+    }
+    setReport(null);
+  }
+
+  function copyPreviousReportRows() {
+    if (!previousReport || previousReport.reportType !== reportType) return;
+    const copiedRows = previousReport.rows.map((row, index) => ({...row, id: nextId + index}));
+    setRows([...copiedRows, emptyRow(nextId + copiedRows.length)]);
+    setNextId(nextId + copiedRows.length + 1);
+    setFocusProductRowId(null);
+    setError('');
     setReport(null);
   }
 
@@ -157,8 +199,8 @@ export default function StockPage({user}) {
     const reportRows = [];
     for (const row of selectedRows) {
       const productName = row.productId === CUSTOM_PRODUCT
-        ? row.productName.trim()
-        : products.find(product => String(product.id) === row.productId)?.productName;
+        ? (row.productName || '').trim()
+        : products.find(product => String(product.id) === row.productId)?.productName || (row.productName || '').trim();
       if (!productName) return setError('Enter a name for each runtime product.');
       const duplicateKey = productName.trim().toLocaleLowerCase();
       if (names.has(duplicateKey)) return setError(`Duplicate product: ${productName}.`);
@@ -176,14 +218,35 @@ export default function StockPage({user}) {
         return setError(`Sales for ${productName} cannot exceed opening balance plus receipts (${formatQuantity(total)}).`);
       reportRows.push({productName, opening, receipts, total, sales, closing: total - sales});
     }
+    const savedReport = {
+      dealerId: String(user.dealerId), reportType, fromDate, toDate,
+      rows: selectedRows.map(row => ({
+        ...row,
+        productName: row.productId === CUSTOM_PRODUCT
+          ? (row.productName || '').trim()
+          : products.find(product => String(product.id) === row.productId)?.productName || (row.productName || '').trim()
+      }))
+    };
     setReport({
-      reportType, fromDate, toDate, stampRequired: stampRequired === 'Yes',
-      authorizedImages: stampRequired === 'Yes'
-        ? selectedImageTypes.map(type => ({type, ...authorizedImages[type]}))
+        reportType, fromDate, toDate, stampRequired: stampRequired === 'Yes',
+        authorizedImages: stampRequired === 'Yes'
+          ? selectedImageTypes.map(type => ({type, ...authorizedImages[type]}))
         : [],
-      rows: reportRows
+        rows: reportRows
     });
+    setPreviousReport(savedReport);
+    try {
+        sessionStorage.setItem(previousReportStorageKey(user.dealerId), JSON.stringify(savedReport));
+    } catch (storageError) {
+        console.error('Could not save the previous stock report shortcut.', storageError);
+        setError('Report generated, but this browser could not save it for quick reuse later.');
+    }
   }
+
+  const productOptions = [
+    ...products.map(product => ({value: String(product.id), label: product.productName})),
+    {value: CUSTOM_PRODUCT, label: 'Add runtime product…'}
+  ];
 
   return <main className="stock-report-page">
     <header className="admin-heading stock-screen-heading">
@@ -208,6 +271,7 @@ export default function StockPage({user}) {
           <label>From Date<input type="date" required value={fromDate} onChange={e => {setFromDate(e.target.value); setReport(null);}}/></label>
           <label>To Date<input type="date" required value={toDate} min={fromDate || undefined} onChange={e => {setToDate(e.target.value); setReport(null);}}/></label>
           <label>Authorized Stamp Required<select value={stampRequired} onChange={e => {setStampRequired(e.target.value); setReport(null);}}><option>No</option><option>Yes</option></select></label>
+          <div className="stock-report-shortcuts"><button type="button" className="quiet-light-button" onClick={() => {const today = localDateValue(new Date()); setFromDate(today); setToDate(today); setReport(null);}}>Today</button><button type="button" className="quiet-light-button" disabled={!previousReport} onClick={() => {setFromDate(previousReport.fromDate); setToDate(previousReport.toDate); setReport(null);}}>Use previous report dates</button></div>
           {stampRequired === 'Yes' && <fieldset className="stock-authorized-image-options">
             <legend>Choose an authorized image to include</legend>
             {AUTHORIZED_IMAGE_OPTIONS.map(option => {
@@ -221,17 +285,25 @@ export default function StockPage({user}) {
           </fieldset>}
         </div>
 
-        <div className="item-list-heading stock-list-heading"><h2>{reportType} products</h2><span>{rows.filter(row => row.productId).length} selected</span></div>
+        <div className="item-list-heading stock-list-heading"><h2>{reportType} products</h2><div className="stock-list-actions"><button type="button" className="quiet-light-button" disabled={!previousReport || previousReport.reportType !== reportType} onClick={copyPreviousReportRows}>Copy previous report rows</button><span>{rows.filter(row => row.productId).length} selected</span></div></div>
         <div className="stock-entry-columns"><span>Product</span><span>O/P Balance</span><span>Receipts</span><span>Sales</span><span></span></div>
         {loading && <p className="admin-help">Loading {reportType.toLowerCase()} products…</p>}
         {!loading && products.length === 0 && <p className="admin-help">No active products are categorized as {reportType}. You can still add runtime products below.</p>}
-        {rows.map((row, index) => <div className="stock-entry-row" key={row.id}>
-          <div className="stock-product-entry">
-            <select aria-label={`Product ${index + 1}`} value={row.productId} onChange={e => changeProduct(row.id, e.target.value)}>
-              <option value="">Select product…</option>
-              {products.map(product => <option value={product.id} key={product.id}>{product.productName}</option>)}
-              <option value={CUSTOM_PRODUCT}>Add runtime product…</option>
-            </select>
+        {rows.map((row, index) => {
+          const rowOptions = row.productId && row.productId !== CUSTOM_PRODUCT
+            && !productOptions.some(option => option.value === row.productId)
+            ? [...productOptions, {value: row.productId, label: row.productName || 'Previously selected product'}]
+            : productOptions;
+          return <div className="stock-entry-row" key={row.id}>
+          <div className={`stock-product-entry ${row.productId === CUSTOM_PRODUCT ? 'custom-product-selected' : ''}`}>
+            <SearchableProductSelect
+              options={rowOptions}
+              value={row.productId}
+              onChange={value => changeProduct(row.id, value)}
+              placeholder="Search products…"
+              ariaLabel={`Product ${index + 1}`}
+              autoFocus={row.id === focusProductRowId}
+            />
             {row.productId === CUSTOM_PRODUCT && <input aria-label={`Runtime product name ${index + 1}`} maxLength="200" placeholder="Product name" value={row.productName} onChange={e => updateRow(row.id, {productName: e.target.value})}/>}
           </div>
           {['opening', 'receipts', 'sales'].map(field => <input
@@ -249,7 +321,8 @@ export default function StockPage({user}) {
           {row.productId
             ? <button type="button" className="remove-button" aria-label={`Remove product ${index + 1}`} onClick={() => removeRow(row.id)}>×</button>
             : <span/>}
-        </div>)}
+          </div>;
+        })}
         {error && <p className="error-message" role="alert">{error}</p>}
         <div className="stock-form-actions"><button className="primary-button" type="submit">Generate Report</button></div>
       </form>
@@ -261,7 +334,7 @@ export default function StockPage({user}) {
         <table className="stock-print-table">
           <thead>
             <tr><th colSpan="7">{user.dealerName?.toLocaleUpperCase() || 'NATARAJA FERTILIZERS'}</th></tr>
-            <tr><th colSpan="7">AGL NO:{LICENSE_NUMBER}</th></tr>
+            <tr><th colSpan="7">{report.reportType === 'Pesticide' ? `PL NO:${user.plNo || ''}` : `AGL NO:${user.aglNo || ''}`}</th></tr>
             <tr><th colSpan="7">STOCK REPORT OF {report.reportType === 'Pesticide' ? 'PESTICIDES' : 'FERTILIZERS'}</th></tr>
             <tr><th colSpan="7">DATE : {formatDate(report.fromDate)} TO {formatDate(report.toDate)}</th></tr>
             <tr>

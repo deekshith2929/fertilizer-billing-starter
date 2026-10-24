@@ -1,0 +1,3 @@
+ALTER TABLE dealers
+    ADD COLUMN agl_no VARCHAR(100),
+    ADD COLUMN pl_no VARCHAR(100);

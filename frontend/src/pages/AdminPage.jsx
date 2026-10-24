@@ -4,7 +4,7 @@ import {API_BASE_URL} from '../api.js';
 const API = API_BASE_URL;
 const emptyDealer = {
   dealerCode: '', legalName: '', displayName: '', addressLine1: '', addressLine2: '',
-  city: '', stateName: '', stateCode: '', pincode: '', gstin: '', phone: ''
+  city: '', stateName: '', stateCode: '', pincode: '', gstin: '', phone: '', aglNo: '', plNo: ''
 };
 const emptyUser = {username: '', password: '', fullName: '', roleCode: 'DEALER', dealerId: ''};
 
@@ -148,6 +148,8 @@ export default function AdminPage({user}) {
           <label>Pincode<input maxLength="10" value={dealerForm.pincode} onChange={e => setDealerForm({...dealerForm, pincode: e.target.value})}/></label>
           <label>GSTIN<input maxLength="15" value={dealerForm.gstin} onChange={e => setDealerForm({...dealerForm, gstin: e.target.value})}/></label>
           <label>Phone<input maxLength="20" value={dealerForm.phone} onChange={e => setDealerForm({...dealerForm, phone: e.target.value})}/></label>
+          <label>AGL No. (Fertilizer)<input maxLength="100" value={dealerForm.aglNo} onChange={e => setDealerForm({...dealerForm, aglNo: e.target.value})}/></label>
+          <label>PL No. (Pesticide)<input maxLength="100" value={dealerForm.plNo} onChange={e => setDealerForm({...dealerForm, plNo: e.target.value})}/></label>
           <button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Create dealer'}</button>
         </form>
       </section>

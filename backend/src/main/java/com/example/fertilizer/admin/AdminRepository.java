@@ -14,12 +14,13 @@ public class AdminRepository {
 
     public List<DealerSummary> findActiveDealers() {
         return jdbc.query("""
-                SELECT id, dealer_code, display_name, state_name, state_code
+                SELECT id, dealer_code, display_name, state_name, state_code, agl_no, pl_no
                 FROM dealers
                 WHERE active = TRUE
                 ORDER BY display_name
                 """, (rs, row) -> new DealerSummary(rs.getLong("id"), rs.getString("dealer_code"),
-                rs.getString("display_name"), rs.getString("state_name"), rs.getString("state_code")));
+                rs.getString("display_name"), rs.getString("state_name"), rs.getString("state_code"),
+                rs.getString("agl_no"), rs.getString("pl_no")));
     }
 
     public List<UserSummary> findUsers() {
@@ -41,13 +42,14 @@ public class AdminRepository {
         Long id = jdbc.queryForObject("""
                 INSERT INTO dealers
                     (dealer_code, legal_name, display_name, address_line1, address_line2,
-                     city, state_name, state_code, pincode, gstin, phone)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     city, state_name, state_code, pincode, gstin, phone, agl_no, pl_no)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """, Long.class, request.dealerCode().trim(), request.legalName().trim(),
                 request.displayName().trim(), request.addressLine1().trim(), blankToNull(request.addressLine2()),
                 request.city().trim(), request.stateName().trim(), request.stateCode().trim(),
-                blankToNull(request.pincode()), blankToNull(request.gstin()), blankToNull(request.phone()));
+                blankToNull(request.pincode()), blankToNull(request.gstin()), blankToNull(request.phone()),
+                blankToNull(request.aglNo()), blankToNull(request.plNo()));
         return id;
     }
 
@@ -98,7 +100,7 @@ public class AdminRepository {
     }
 
     public record DealerSummary(Long id, String dealerCode, String displayName,
-                                String stateName, String stateCode) {}
+                                String stateName, String stateCode, String aglNo, String plNo) {}
     public record UserSummary(Long id, String username, String fullName, String role,
                               Long dealerId, String dealerName, boolean active) {}
 }

@@ -120,7 +120,9 @@ public class AdminController {
             @NotBlank @Pattern(regexp = "\\d{2}", message = "State code must be two digits") String stateCode,
             @Size(max = 10) String pincode,
             @Size(max = 15) String gstin,
-            @Size(max = 20) String phone) {}
+            @Size(max = 20) String phone,
+            @Size(max = 100) String aglNo,
+            @Size(max = 100) String plNo) {}
 
     public record CreateUserRequest(
             @NotBlank @Size(max = 80) String username,

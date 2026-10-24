@@ -36,7 +36,7 @@ public class AuthController {
         session.setAttribute("userId", user.id());
         log.info("Database login successful for username={}", normalizedUsername);
         return new LoginResponse(user.username(), user.fullName(), user.role(),
-                user.dealerId(), user.dealerName(), user.stateCode());
+                user.dealerId(), user.dealerName(), user.stateCode(), user.aglNo(), user.plNo());
     }
 
     @PostMapping("/logout")

@@ -16,7 +16,7 @@ public class AuthRepository {
     public Optional<AuthenticatedUser> findActiveUser(String username) {
         List<AuthenticatedUser> users = jdbc.query("""
                 SELECT u.id, u.username, u.password_hash, u.full_name, u.dealer_id,
-                       d.display_name AS dealer_name, d.state_code,
+                       d.display_name AS dealer_name, d.state_code, d.agl_no, d.pl_no,
                        COALESCE((SELECT r.role_code
                                  FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                                  WHERE ur.user_id = u.id
@@ -28,7 +28,7 @@ public class AuthRepository {
                 """, (rs, row) -> new AuthenticatedUser(
                 rs.getLong("id"), rs.getString("username"), rs.getString("password_hash"), rs.getString("full_name"),
                 rs.getString("role"), rs.getLong("dealer_id"), rs.getString("dealer_name"),
-                rs.getString("state_code")), username);
+                rs.getString("state_code"), rs.getString("agl_no"), rs.getString("pl_no")), username);
         return users.stream().findFirst();
     }
 
@@ -53,6 +53,7 @@ public class AuthRepository {
     }
 
     public record AuthenticatedUser(Long id, String username, String passwordHash, String fullName,
-                                    String role, Long dealerId, String dealerName, String stateCode) {}
+                                    String role, Long dealerId, String dealerName, String stateCode,
+                                    String aglNo, String plNo) {}
     public record SessionUser(Long id, Long dealerId, String role) {}
 }
