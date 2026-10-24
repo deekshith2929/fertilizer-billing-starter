@@ -15,7 +15,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([emptyRow(1)]);
   const [nextId, setNextId] = useState(2);
-  const [focusProductRowId, setFocusProductRowId] = useState(1);
+  const [focusProductRowId, setFocusProductRowId] = useState(null);
   const [bill, setBill] = useState(null);
   const [page, setPage] = useState('billing');
   const [type, setType] = useState(() => sessionStorage.getItem('billing.billType') || 'CASH');
@@ -40,6 +40,11 @@ export default function App() {
   }, [user, page]);
 
   const activeRows = useMemo(() => rows.filter(row => row.productId), [rows]);
+  function navigateToPage(nextPage) {
+    if (nextPage !== 'billing') setFocusProductRowId(null);
+    setPage(nextPage);
+  }
+
   const updateRow = (id, patch) => {
     setRows(current => current.map(row => row.id === id ? {...row, ...patch} : row));
     setBill(null);
@@ -120,7 +125,7 @@ export default function App() {
       const response = await fetch(`${API}/auth/logout`, {method: 'POST', credentials: 'include'});
       if (!response.ok) throw new Error('Could not log out. Please try again.');
       setUser(null);
-      setPage('billing');
+      navigateToPage('billing');
       setBill(null);
     } catch (e) {
       setError(e.message || 'Could not log out.');
@@ -173,7 +178,7 @@ export default function App() {
 
   return <div className="app-shell">
     <header className="app-header"><div><strong>Agri Dealer Hub</strong><small>{user.dealerName} · {user.fullName}</small></div><button className="quiet-button" onClick={logout}>Logout</button></header>
-    <nav className="app-nav"><button className={page === 'billing' ? 'active' : ''} onClick={() => setPage('billing')}>Billing</button>{['ADMIN', 'DEALER'].includes(user.role) && <button className={page === 'products' ? 'active' : ''} onClick={() => setPage('products')}>Products</button>}{['ADMIN', 'DEALER'].includes(user.role) ? <button className={page === 'stock' ? 'active' : ''} onClick={() => setPage('stock')}>Stock Report</button> : <span>Stock Report <em>Coming later</em></span>}<span>Company / Dealer Ledger <em>Coming later</em></span><span>Farmer / Customer Ledger <em>Coming later</em></span>{user.role === 'ADMIN' && <button className={page === 'admin' ? 'active' : ''} onClick={() => setPage('admin')}>Admin</button>}</nav>
+    <nav className="app-nav"><button className={page === 'billing' ? 'active' : ''} onClick={() => navigateToPage('billing')}>Billing</button>{['ADMIN', 'DEALER'].includes(user.role) && <button className={page === 'products' ? 'active' : ''} onClick={() => navigateToPage('products')}>Products</button>}{['ADMIN', 'DEALER'].includes(user.role) ? <button className={page === 'stock' ? 'active' : ''} onClick={() => navigateToPage('stock')}>Stock Report</button> : <span>Stock Report <em>Coming later</em></span>}<span>Company / Dealer Ledger <em>Coming later</em></span><span>Farmer / Customer Ledger <em>Coming later</em></span>{user.role === 'ADMIN' && <button className={page === 'admin' ? 'active' : ''} onClick={() => navigateToPage('admin')}>Admin</button>}</nav>
 
     {page === 'admin' && user.role === 'ADMIN'
       ? <AdminPage user={user}/>

@@ -58,7 +58,7 @@ export default function StockPage({user}) {
   const [products, setProducts] = useState([]);
   const [rows, setRows] = useState([emptyRow(1)]);
   const [nextId, setNextId] = useState(2);
-  const [focusProductRowId, setFocusProductRowId] = useState(1);
+  const [focusProductRowId, setFocusProductRowId] = useState(null);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [stampRequired, setStampRequired] = useState('No');
@@ -74,7 +74,7 @@ export default function StockPage({user}) {
     setProducts([]);
     setRows([emptyRow(1)]);
     setNextId(2);
-    setFocusProductRowId(1);
+    setFocusProductRowId(null);
     setReport(null);
     setError('');
     setLoading(true);
