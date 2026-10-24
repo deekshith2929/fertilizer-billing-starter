@@ -19,5 +19,10 @@ Users with the `ADMIN` role see the Admin module after login. It supports creati
 
 Users with the `DEALER` or `ADMIN` role can open **Products** to create, edit, restore, and deactivate dealer-specific products, and to insert or update default prices. Dealer users are restricted to their own dealer; admins can select a dealer. Deletion deactivates the product and price instead of removing the database record. Flyway migration V3 gives existing products with dealer prices a dealer-owned catalog row, cloning products when they were priced for multiple dealers.
 
+## Netlify deployment
+The frontend uses `http://localhost:8080/api` in development and defaults to `https://fertilizer-billing-starter.onrender.com/api` in production. In Netlify, set the `VITE_API_BASE_URL` environment variable to `https://fertilizer-billing-starter.onrender.com/api`, then trigger a new deploy; Vite embeds this value at build time. The backend must also allow the exact Netlify site origin through CORS.
+
+For the Render backend, set `FRONTEND_ORIGIN=https://fertilizerdealersinventory.netlify.app`, `SESSION_COOKIE_SAME_SITE=None`, and `SESSION_COOKIE_SECURE=true`, then redeploy the backend. The origin must exactly match the browser address, with no trailing slash. Local development defaults remain localhost and do not require these variables.
+
 ## Important
 This is a development starter, not production-ready. The demo account is seeded with a known development password; replace or disable it before deployment. Admin sessions use an HTTP-only server session cookie; serve over HTTPS and configure production CORS origins before network exposure. Other billing/product endpoints still need authenticated dealer scoping before deployment. Demo product prices/dealer data are illustrative. Tax/place-of-supply logic is simplified and must be reviewed before real use. No generated bill is stored in PostgreSQL.

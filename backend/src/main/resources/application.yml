@@ -3,6 +3,9 @@ server:
   servlet:
     session:
       timeout: 30m
+      cookie:
+        same-site: ${SESSION_COOKIE_SAME_SITE:lax}
+        secure: ${SESSION_COOKIE_SECURE:false}
 spring:
   datasource:
    # url: ${DB_URL:jdbc:postgresql://localhost:5432/fertilizer_db}

@@ -1,8 +1,9 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import AdminPage from './pages/AdminPage.jsx';
 import ProductsPage from './pages/ProductsPage.jsx';
+import {API_BASE_URL} from './api.js';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+const API = API_BASE_URL;
 const money = value => new Intl.NumberFormat('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 2}).format(Number(value || 0));
 const emptyRow = id => ({id, productId: '', productName: '', hsnCode: '', bagSizeKg: '50', gstRate: '5', price: '', bags: ''});
 const CUSTOM_PRODUCT = '__custom__';
@@ -18,7 +19,7 @@ export default function App() {
   const [destination, setDestination] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -79,7 +80,9 @@ export default function App() {
       if (!response.ok) throw new Error(data.message || data.detail || 'Login failed');
       setUser(data);
     } catch (e) {
-      setError(e.message === 'Failed to fetch' ? 'Cannot connect to backend at localhost:8080. Start Spring Boot and verify the database connection.' : e.message);
+      setError(e instanceof TypeError
+        ? `Cannot reach the backend at ${API}. Check that it is online and allows this site's origin.`
+        : e.message);
     } finally { setLoading(false); }
   }
 
@@ -127,12 +130,11 @@ export default function App() {
   }
 
   if (!user) return <main className="login-shell"><form className="login-card" onSubmit={login}>
-    <h1>Fertilizer Billing</h1><p>Local demo login</p>
+    <h1>Fertilizer Billing</h1><p>Sign in with your account</p>
     <label>Username<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)}/></label>
     <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}/></label>
     {error && <p className="error-message">{error}</p>}
     <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Login'}</button>
-    <small>Demo login: admin / admin123</small>
   </form></main>;
 
   return <div className="app-shell">

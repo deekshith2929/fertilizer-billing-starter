@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/billing")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${FRONTEND_ORIGIN:http://localhost:5173}")
 public class BillingController {
     private static final Logger log = LoggerFactory.getLogger(BillingController.class);
     private final BillingService billingService;

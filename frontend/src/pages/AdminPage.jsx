@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
+import {API_BASE_URL} from '../api.js';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+const API = API_BASE_URL;
 const emptyDealer = {
   dealerCode: '', legalName: '', displayName: '', addressLine1: '', addressLine2: '',
   city: '', stateName: '', stateCode: '', pincode: '', gstin: '', phone: ''
