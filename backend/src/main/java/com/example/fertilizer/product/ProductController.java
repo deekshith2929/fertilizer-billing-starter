@@ -1,32 +1,38 @@
 package com.example.fertilizer.product;
-
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.example.fertilizer.product.dto.ProductDto;
+import com.example.fertilizer.product.service.ProductService;
+import com.example.fertilizer.auth.AuthRepository;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.*;
-
+import java.util.List;
 @RestController
 @RequestMapping("/api/products")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class ProductController {
-    private final JdbcTemplate jdbc;
-
-    public ProductController(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    private static final Logger log = LoggerFactory.getLogger(ProductController.class);
+    private final ProductService productService;
+    private final AuthRepository authRepository;
+    public ProductController(ProductService productService, AuthRepository authRepository) {
+        this.productService = productService;
+        this.authRepository = authRepository;
     }
-
     @GetMapping
-    public List<Map<String, Object>> list(@RequestParam(defaultValue = "2") long dealerId) {
-        dealerId=2;
-        return jdbc.query("SELECT p.id,p.product_name,p.hsn_code,p.bag_size_kg,p.gst_rate,dp.default_price_incl_gst FROM products p JOIN dealer_product_prices dp ON dp.product_id=p.id WHERE dp.dealer_id=? AND p.active=true AND dp.active=true ORDER BY p.product_name", (r, n) -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", r.getLong("id"));
-            m.put("productName", r.getString("product_name"));
-            m.put("hsnCode", r.getString("hsn_code"));
-            m.put("bagSizeKg", r.getBigDecimal("bag_size_kg"));
-            m.put("gstRate", r.getBigDecimal("gst_rate"));
-            m.put("defaultPriceInclGst", r.getBigDecimal("default_price_incl_gst"));
-            return m;
-        }, dealerId);
+    public List<ProductDto> list(@RequestParam(required = false) Long dealerId, HttpSession session) {
+        Object sessionUserId = session.getAttribute("userId");
+        if (!(sessionUserId instanceof Long userId))
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Please log in to continue.");
+        AuthRepository.SessionUser user = authRepository.findActiveSessionUser(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Please log in to continue."));
+        if (!"ADMIN".equals(user.role()) && !"DEALER".equals(user.role()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Dealer or admin access is required.");
+        long scopedDealerId = "ADMIN".equals(user.role()) && dealerId != null ? dealerId : user.dealerId();
+        if ("DEALER".equals(user.role()) && dealerId != null && !dealerId.equals(user.dealerId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own dealer's products.");
+        log.debug("GET /api/products dealerId={}", scopedDealerId);
+        return productService.getProducts(scopedDealerId);
     }
 }

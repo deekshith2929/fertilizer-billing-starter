@@ -1,151 +1,222 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
+import AdminPage from './pages/AdminPage.jsx';
+import ProductsPage from './pages/ProductsPage.jsx';
 
-const API = 'http://localhost:8080/api';
-const money = v => new Intl.NumberFormat('en-IN', {style: 'currency', currency: 'INR'}).format(Number(v || 0));
+const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+const money = value => new Intl.NumberFormat('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 2}).format(Number(value || 0));
+const emptyRow = id => ({id, productId: '', productName: '', hsnCode: '', bagSizeKg: '50', gstRate: '5', price: '', bags: ''});
+const CUSTOM_PRODUCT = '__custom__';
+
 export default function App() {
-    const [user, setUser] = useState(null), [products, setProducts] = useState([]), [rows, setRows] = useState([{
-        id: 1,
-        productId: '',
-        price: '',
-        bags: '1'
-    }]), [next, setNext] = useState(2), [bill, setBill] = useState(null), [type, setType] = useState('CASH'), [destination, setDestination] = useState(''), [error, setError] = useState(''), [u, setU] = useState('admin'), [pw, setPw] = useState('admin123');
-    useEffect(() => {
-        if (user) fetch(`${API}/products?dealerId=${user.dealerId}`).then(r => r.json()).then(setProducts).catch(() => setError('Could not load products. Check backend/database.'))
-    }, [user]);
-    const upd = (id, p) => setRows(a => a.map(x => x.id === id ? {...x, ...p} : x));
+  const [user, setUser] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [rows, setRows] = useState([emptyRow(1)]);
+  const [nextId, setNextId] = useState(2);
+  const [bill, setBill] = useState(null);
+  const [page, setPage] = useState('billing');
+  const [type, setType] = useState('CASH');
+  const [destination, setDestination] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
 
-    async function login(e) {
-        e.preventDefault();
-        try {
-            let r = await fetch(`${API}/auth/login`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: u, password: pw})
-            }), d = await r.json();
-            if (!r.ok) throw Error('Login failed');
-            setUser(d)
-        } catch (e) {
-            setError(e.message)
-        }
+  useEffect(() => {
+    if (!user || page !== 'billing') return;
+    let cancelled = false;
+    fetch(`${API}/products?dealerId=${user.dealerId}`, {credentials: 'include'})
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Could not load products.');
+        return data;
+      })
+      .then(data => { if (!cancelled) setProducts(data); })
+      .catch(e => { if (!cancelled) setError(e.message || 'Could not load products. Check backend/database.'); });
+    return () => { cancelled = true; };
+  }, [user, page]);
+
+  const activeRows = useMemo(() => rows.filter(row => row.productId), [rows]);
+  const updateRow = (id, patch) => {
+    setRows(current => current.map(row => row.id === id ? {...row, ...patch} : row));
+    setBill(null);
+  };
+
+  function selectProduct(rowId, productId) {
+    const product = products.find(item => String(item.id) === productId);
+    setRows(current => {
+      let updated = current.map(row => row.id === rowId
+        ? {...row, productId, productName: '', hsnCode: '', bagSizeKg: '50', gstRate: '5',
+          price: product ? String(product.defaultPriceInclGst) : '', bags: productId ? '1' : ''}
+        : row);
+      // Keep exactly one empty row at the end; selecting one product does not create four fixed rows.
+      updated = updated.filter((row, index) => row.productId || index === updated.length - 1);
+      if (productId && updated[updated.length - 1]?.productId) updated.push(emptyRow(nextId));
+      if (!updated.length) updated = [emptyRow(nextId)];
+      return updated;
+    });
+    if (productId) setNextId(id => id + 1);
+    setBill(null);
+  }
+
+  function removeRow(id) {
+    setRows(current => {
+      const kept = current.filter(row => row.id !== id);
+      const filled = kept.filter(row => row.productId);
+      return [...filled, emptyRow(nextId)];
+    });
+    setNextId(id => id + 1);
+    setBill(null);
+  }
+
+  async function login(event) {
+    event.preventDefault(); setError(''); setLoading(true);
+    try {
+      const response = await fetch(`${API}/auth/login`, {
+        method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username, password})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.detail || 'Login failed');
+      setUser(data);
+    } catch (e) {
+      setError(e.message === 'Failed to fetch' ? 'Cannot connect to backend at localhost:8080. Start Spring Boot and verify the database connection.' : e.message);
+    } finally { setLoading(false); }
+  }
+
+  async function logout() {
+    setError('');
+    try {
+      const response = await fetch(`${API}/auth/logout`, {method: 'POST', credentials: 'include'});
+      if (!response.ok) throw new Error('Could not log out. Please try again.');
+      setUser(null);
+      setPage('billing');
+      setBill(null);
+    } catch (e) {
+      setError(e.message || 'Could not log out.');
     }
+  }
 
-    async function calc() {
-        try {
-            setError('');
-            let items = rows.filter(x => x.productId && Number(x.bags) > 0).map(x => ({
-                productId: +x.productId,
-                priceInclGst: +x.price,
-                bags: +x.bags
-            }));
-            if (!items.length) throw Error('Select at least one product.');
-            let r = await fetch(`${API}/billing/calculate`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    dealerId: user.dealerId,
-                    items,
-                    billType: type,
-                    destinationStateCode: destination || undefined
-                })
-            }), d = await r.json();
-            if (!r.ok) throw Error(d.message || 'Calculation failed');
-            setBill(d)
-        } catch (e) {
-            setError(e.message)
+  async function calculate(event) {
+    event?.preventDefault(); setError(''); setLoading(true);
+    try {
+      const items = activeRows.map(row => {
+        if (!row.bags || Number(row.bags) < 1) throw new Error('Enter bags (at least 1) for each selected product.');
+        if (!row.price || Number(row.price) <= 0) throw new Error('Enter a valid price for each selected product.');
+        if (row.productId === CUSTOM_PRODUCT) {
+          if (!row.productName.trim()) throw new Error('Enter a name for each custom product.');
+          if (!row.bagSizeKg || Number(row.bagSizeKg) <= 0) throw new Error('Enter a valid bag weight for each custom product.');
+          if (row.gstRate === '' || Number(row.gstRate) < 0 || Number(row.gstRate) > 100) throw new Error('Enter a GST rate from 0 to 100 for each custom product.');
+          return {
+            productId: null, productName: row.productName.trim(), hsnCode: row.hsnCode.trim(),
+            bagSizeKg: Number(row.bagSizeKg), gstRate: Number(row.gstRate),
+            priceInclGst: Number(row.price), bags: Number(row.bags)
+          };
         }
-    }
+        return {productId: Number(row.productId), priceInclGst: Number(row.price), bags: Number(row.bags)};
+      });
+      if (!items.length) throw new Error('Select at least one product.');
+      const response = await fetch(`${API}/billing/calculate`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({dealerId: user.dealerId, items, billType: type, destinationStateCode: destination || undefined})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Bill calculation failed.');
+      setBill(data);
+    } catch (e) { setError(e.message || 'Bill calculation failed.'); }
+    finally { setLoading(false); }
+  }
 
-    if (!user) return <main className="login">
-        <form onSubmit={login}><h1>Fertilizer Billing</h1><p>Local demo login</p><label>Username<input value={u}
-                                                                                                       onChange={e => setU(e.target.value)}/></label><label>Password<input
-            type="password" value={pw} onChange={e => setPw(e.target.value)}/></label>{error &&
-            <p className="err">{error}</p>}
-            <button>Login</button>
-            <small>admin / admin123</small></form>
-    </main>;
-    return <>
-        <header><h2>Fertilizer Billing</h2><span>{user.dealerName} · {user.fullName}</span>
-            <button onClick={() => setUser(null)}>Logout</button>
-        </header>
-        <nav><b>Billing</b><span>Stock Report (later)</span><span>Company / Dealer Ledger (later)</span><span>Farmer / Customer Ledger (later)</span>
-        </nav>
-        <main className="grid">
-            <section className="card"><h1>GST Billing Calculator</h1><p>Products and default prices are loaded from the
-                backend.</p>
-                <div className="row"><label>Bill type<select value={type} onChange={e => setType(e.target.value)}>
-                    <option value="CASH">Cash Bill</option>
-                    <option value="CREDIT">Credit Bill</option>
-                </select></label><label>Destination state code<input value={destination}
-                                                                     onChange={e => setDestination(e.target.value)}
-                                                                     placeholder="Default: dealer state"/></label></div>
-                <div className="itemsHead"><h3>Items</h3>
-                    <button onClick={() => {
-                        setRows(a => [...a, {id: next, productId: '', price: '', bags: '1'}]);
-                        setNext(n => n + 1)
-                    }}>+ Add item
-                    </button>
+  if (!user) return <main className="login-shell"><form className="login-card" onSubmit={login}>
+    <h1>Fertilizer Billing</h1><p>Local demo login</p>
+    <label>Username<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)}/></label>
+    <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}/></label>
+    {error && <p className="error-message">{error}</p>}
+    <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Login'}</button>
+    <small>Demo login: admin / admin123</small>
+  </form></main>;
+
+  return <div className="app-shell">
+    <header className="app-header"><div><strong>Fertilizer Billing</strong><small>{user.dealerName} · {user.fullName}</small></div><button className="quiet-button" onClick={logout}>Logout</button></header>
+    <nav className="app-nav"><button className={page === 'billing' ? 'active' : ''} onClick={() => setPage('billing')}>Billing</button>{['ADMIN', 'DEALER'].includes(user.role) && <button className={page === 'products' ? 'active' : ''} onClick={() => setPage('products')}>Products</button>}<span>Stock Report <em>Coming later</em></span><span>Company / Dealer Ledger <em>Coming later</em></span><span>Farmer / Customer Ledger <em>Coming later</em></span>{user.role === 'ADMIN' && <button className={page === 'admin' ? 'active' : ''} onClick={() => setPage('admin')}>Admin</button>}</nav>
+
+    {page === 'admin' && user.role === 'ADMIN'
+      ? <AdminPage user={user}/>
+      : page === 'products' && ['ADMIN', 'DEALER'].includes(user.role)
+        ? <ProductsPage user={user}/>
+        : <>
+    <main className="billing-layout">
+      <section className="entry-panel">
+        <div className="panel-heading"><span className="eyebrow">RUNTIME BILLING</span><h1>GST Billing Calculator</h1><p>Choose products and quantities. Default prices are fetched from the backend and can be overridden for this bill only.</p></div>
+        <form onSubmit={calculate}>
+          <div className="form-grid">
+            <label>Bill type<select value={type} onChange={e => setType(e.target.value)}><option value="CASH">Cash Bill</option><option value="CREDIT">Credit Bill</option></select></label>
+            <label>Customer state code <input value={destination} onChange={e => setDestination(e.target.value)} maxLength={2} placeholder={`Default: ${user.stateCode || 'dealer state'}`}/></label>
+          </div>
+          <div className="item-list-heading"><h2>Bill items</h2><span>{activeRows.length} selected</span></div>
+          <div className="billing-columns"><span>Product</span><span>Price incl. GST (₹)</span><span>Bags</span><span>Weight (kg)</span><span></span></div>
+          {rows.map((row, index) => {
+            const product = products.find(item => String(item.id) === row.productId);
+            const customProduct = row.productId === CUSTOM_PRODUCT;
+            const selectedProduct = product || (customProduct ? row : null);
+            return <div className={`billing-row ${!row.productId ? 'empty-row' : ''}`} key={row.id}>
+              <select aria-label={`Product ${index + 1}`} value={row.productId} onChange={e => selectProduct(row.id, e.target.value)}>
+                <option value="">{index === 0 ? 'Select product…' : 'Add next product…'}</option>
+                {products.map(item => <option key={item.id} value={item.id}>{item.productName}</option>)}
+                <option value={CUSTOM_PRODUCT}>Other / enter manually…</option>
+              </select>
+              <input aria-label="Price including GST" type="number" min="0.01" step="0.01" value={row.price} disabled={!selectedProduct} placeholder="Auto price" onChange={e => updateRow(row.id, {price: e.target.value})}/>
+              <input aria-label="Number of bags" type="number" min="1" step="1" value={row.bags} disabled={!selectedProduct} placeholder="Bags" onChange={e => updateRow(row.id, {bags: e.target.value})}/>
+              <div className="weight-cell">{selectedProduct && row.bags ? money(Number(selectedProduct.bagSizeKg) * Number(row.bags)) : '—'}</div>
+              {selectedProduct ? <button type="button" className="remove-button" aria-label="Remove item" onClick={() => removeRow(row.id)}>×</button> : <span/>}
+              {product && <small className="product-meta">HSN {product.hsnCode} · {product.bagSizeKg} kg/bag · GST {product.gstRate}% · default ₹{money(product.defaultPriceInclGst)}</small>}
+              {customProduct && <>
+                <label className="custom-product-name">Product name<input aria-label="Custom product name" value={row.productName} onChange={e => updateRow(row.id, {productName: e.target.value})} maxLength={200} placeholder="Type product name"/></label>
+                <div className="custom-product-fields">
+                  <label>HSN code<input aria-label="Custom product HSN code" value={row.hsnCode} onChange={e => updateRow(row.id, {hsnCode: e.target.value})} maxLength={20} placeholder="Optional"/></label>
+                  <label>Weight per bag (kg)<input aria-label="Custom product bag weight in kilograms" type="number" min="0.001" step="0.001" value={row.bagSizeKg} onChange={e => updateRow(row.id, {bagSizeKg: e.target.value})}/></label>
+                  <label>GST (%)<input aria-label="Custom product GST rate" type="number" min="0" max="100" step="0.01" value={row.gstRate} onChange={e => updateRow(row.id, {gstRate: e.target.value})}/></label>
                 </div>
-                {rows.map((x, i) => {
-                    let p = products.find(p => String(p.id) === x.productId);
-                    return <div className="item" key={x.id}>
-                        <div className="itemsHead"><b>Item {i + 1}</b>
-                            <button
-                                onClick={() => setRows(a => a.length > 1 ? a.filter(r => r.id !== x.id) : a)}>Remove
-                            </button>
-                        </div>
-                        <label>Product<select value={x.productId} onChange={e => {
-                            let p = products.find(p => String(p.id) === e.target.value);
-                            upd(x.id, {
-                                productId: e.target.value,
-                                price: p ? String(p.defaultPriceInclGst) : '',
-                                bags: '1'
-                            })
-                        }}>
-                            <option value="">Select product</option>
-                            {products.map(p => <option key={p.id} value={p.id}>{p.productName}</option>)}
-                        </select></label>
-                        <div className="row three"><label>Price incl. GST<input type="number" step=".01" value={x.price}
-                                                                                onChange={e => upd(x.id, {price: e.target.value})}/></label><label>Bags<input
-                            type="number" min="1" value={x.bags}
-                            onChange={e => upd(x.id, {bags: e.target.value})}/></label><label>Weight kg<input readOnly
-                                                                                                              value={p ? Number(p.bagSizeKg * x.bags) : ''}/></label>
-                        </div>
-                        {p && <small>HSN {p.hsnCode} · {p.gstRate}% GST · {p.bagSizeKg} kg/bag</small>}</div>
-                })}{error && <p className="err">{error}</p>}
-                <button className="go" onClick={calc}>Calculate bill</button>
-                <small>Price overrides apply only to this bill. Nothing is saved as an invoice.</small></section>
-            <section className="card"><h2>Bill preview</h2>{!bill ?
-                <p className="muted">Select products and calculate to preview the bill.</p> :
-                <article id="bill"><h2>TAX INVOICE</h2><h2>{bill.dealer.display_name || 'Dealer'}</h2>
-                    <p>{[bill.dealer.address_line1, bill.dealer.address_line2, bill.dealer.city, bill.dealer.state_name, bill.dealer.pincode].filter(Boolean).join(', ')}</p>
-                    <p>GSTIN: {bill.dealer.gstin || '—'}</p>
-                    <p>{bill.billType} · {new Date(bill.generatedAt).toLocaleDateString('en-IN')}</p>
-                    <table>
-                        <thead>
-                        <tr>
-                            <th>Product / HSN</th>
-                            <th>Bags</th>
-                            <th>Qty kg</th>
-                            <th>Rate</th>
-                            <th>Taxable</th>
-                            <th>Amount</th>
-                        </tr>
-                        </thead>
-                        <tbody>{bill.items.map((x, i) => <tr key={i}>
-                            <td>{x.productName}<small>{x.hsnCode}</small></td>
-                            <td>{x.bags}</td>
-                            <td>{x.quantityKg}</td>
-                            <td>{money(x.rateInclGst)}</td>
-                            <td>{money(x.taxableAmount)}</td>
-                            <td>{money(x.amountInclGst)}</td>
-                        </tr>)}</tbody>
-                    </table>
-                    <p>Taxable value: <b>{money(bill.taxableTotal)}</b></p>{bill.taxType === 'IGST' ?
-                        <p>IGST: {money(bill.igstTotal)}</p> : <><p>CGST: {money(bill.cgstTotal)}</p>
-                            <p>SGST: {money(bill.sgstTotal)}</p></>}<h2>Total: {money(bill.grandTotal)}</h2><p
-                        className="muted">Runtime-only preview. No bill is stored.</p>
-                    <button onClick={() => window.print()}>Print / Save PDF</button>
-                </article>}</section>
-        </main>
-    </>
+                  </>}
+            </div>;
+          })}
+          {error && <p className="error-message">{error}</p>}
+          <button className="primary-button calculate-button" disabled={loading}>{loading ? 'Calculating…' : 'Calculate bill'}</button>
+          <p className="runtime-note">Runtime-only calculation. No invoice or bill history is saved.</p>
+        </form>
+      </section>
+
+      <section className="preview-panel">
+        <div className="preview-toolbar"><div><span className="eyebrow">PRINT PREVIEW</span><h2>Generated bill</h2></div><span className="preview-status">{bill ? 'Ready to print' : 'Waiting for calculation'}</span></div>
+        {!bill ? <div className="preview-empty"><div className="preview-empty-icon">₹</div><h3>Your bill will appear here</h3><p>Select one or more products, enter the number of bags and calculate the bill.</p></div> : <article className="invoice-paper" id="invoice-paper">
+          <div className="invoice-title">Tax Invoice</div>
+          <button className="invoice-back" type="button" onClick={() => setBill(null)}>BACK</button>
+          <div className="invoice-mode">{bill.billType === 'Credit Bill' ? 'Cash / CreditBill' : 'Cash / CreditBill'}</div>
+          <div className="invoice-number">Invoice Number</div>
+          <h1>{bill.dealer.displayName}</h1>
+          <p className="invoice-address">{[bill.dealer.addressLine1, bill.dealer.addressLine2, bill.dealer.city, bill.dealer.stateName, bill.dealer.pincode].filter(Boolean).join(', ')}</p>
+          {bill.dealer.gstin && <p className="invoice-gstin">GSTIN: {bill.dealer.gstin}</p>}
+          <table className="invoice-table"><thead><tr><th>S.No.</th><th>Particulars</th><th>HSN<br/>CODE</th><th>No of<br/>Bags</th><th>Qty.</th><th>Rate</th><th>Amount</th></tr></thead>
+            <tbody>{bill.items.map((item, index) => <tr key={`${item.hsnCode}-${index}`}>
+              <td>{index + 1}</td><td className="particular-cell">{item.productName}</td><td>{item.hsnCode}</td><td>{item.bags}</td><td>{money(item.quantityKg)}</td><td>{money(Math.round(Number(item.rateInclGst) / (1 + Number(item.gstRate) / 100)))}</td><td>{money(item.taxableAmount)}</td>
+            </tr>)}</tbody>
+          </table>
+          <div className="invoice-summary"><div className="summary-rows"><div><b>Net<br/>amount</b><span>{money(bill.taxableTotal)}</span></div>
+            {Array.from(new Set(bill.items.map(item => Number(item.gstRate)))).sort((a,b) => a-b).map(rate => {
+              const rateLines = bill.items.filter(item => Number(item.gstRate) === rate);
+              const cgstAtRate = rateLines.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
+              const sgstAtRate = rateLines.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
+              const igstAtRate = rateLines.reduce((sum, item) => sum + Number(item.igst || 0), 0);
+              return bill.taxType === 'IGST'
+                ? <div key={`igst-${rate}`}><b>IGST<br/>tax {money(rate)}%</b><span>{money(igstAtRate)}</span></div>
+                : <React.Fragment key={`gst-${rate}`}><div><b>CGST<br/>tax {money(rate / 2)}%</b><span>{money(cgstAtRate)}</span></div><div><b>SGST<br/>tax {money(rate / 2)}%</b><span>{money(sgstAtRate)}</span></div></React.Fragment>;
+            })}
+            <div className="total-row"><b>TOTAL</b><span>{money(bill.grandTotal)}</span></div></div>
+            <div className="tax-stamp">GST {new Set(bill.items.map(item => Number(item.gstRate))).size === 1 ? `${money(bill.items[0].gstRate)}%` : 'DETAILS'}</div>
+          </div>
+          <div className="invoice-footer"><span>Runtime-only preview · No bill is stored</span><button type="button" className="print-button" onClick={() => window.print()}>Print / Save PDF</button></div>
+        </article>}
+      </section>
+    </main>
+    </>}
+  </div>;
 }

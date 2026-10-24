@@ -33,10 +33,11 @@ public class BillingRepository {
             return jdbc.queryForObject("""
                 SELECT p.product_name, p.hsn_code, p.bag_size_kg, p.gst_rate, dp.default_price_incl_gst
                 FROM products p JOIN dealer_product_prices dp ON dp.product_id = p.id
-                WHERE p.id = ? AND dp.dealer_id = ? AND p.active = TRUE AND dp.active = TRUE
+                WHERE p.id = ? AND p.dealer_id = ? AND dp.dealer_id = ?
+                  AND p.active = TRUE AND dp.active = TRUE
                 """, (rs, row) -> new ProductPrice(rs.getString("product_name"), rs.getString("hsn_code"),
                     rs.getBigDecimal("bag_size_kg"), rs.getBigDecimal("gst_rate"),
-                    rs.getBigDecimal("default_price_incl_gst")), productId, dealerId);
+                    rs.getBigDecimal("default_price_incl_gst")), productId, dealerId, dealerId);
         } catch (org.springframework.dao.EmptyResultDataAccessException ex) {
             log.warn("Product not available for dealer: dealerId={}, productId={}", dealerId, productId);
             throw new IllegalArgumentException("Selected product is not active or has no price for this dealer.");

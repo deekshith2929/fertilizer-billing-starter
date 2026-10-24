@@ -3,12 +3,14 @@ package com.example.fertilizer.common;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,6 +28,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
         return response(HttpStatus.BAD_REQUEST, ex.getMessage(), Map.of());
+    }
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        return response(status, ex.getReason() == null ? status.getReasonPhrase() : ex.getReason(), Map.of());
+    }
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateKey(DuplicateKeyException ex) {
+        log.warn("Database rejected a duplicate record", ex);
+        return response(HttpStatus.CONFLICT, "A record with those details already exists.", Map.of());
     }
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, Object>> handleDatabase(DataAccessException ex) {

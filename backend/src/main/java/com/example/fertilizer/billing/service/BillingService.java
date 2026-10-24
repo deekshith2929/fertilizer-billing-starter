@@ -38,7 +38,8 @@ public class BillingService {
                 if (item.bags() == null || item.bags() < 1) throw new IllegalArgumentException("Bags must be at least 1.");
                 if (item.priceInclGst() == null || item.priceInclGst().signum() <= 0)
                     throw new IllegalArgumentException("Price including GST must be greater than zero.");
-                BillingRepository.ProductPrice product = repository.findPricedProduct(dealerId, item.productId());
+                BillingRepository.ProductPrice product = item.productId() == null
+                        ? runtimeProduct(item) : repository.findPricedProduct(dealerId, item.productId());
                 BigDecimal gross = item.priceInclGst().multiply(BigDecimal.valueOf(item.bags())).setScale(2, RoundingMode.HALF_UP);
                 BigDecimal taxable = gross.multiply(HUNDRED).divide(HUNDRED.add(product.gstRate()), 2, RoundingMode.HALF_UP);
                 BigDecimal tax = gross.subtract(taxable).setScale(2, RoundingMode.HALF_UP);
@@ -65,5 +66,17 @@ public class BillingService {
             log.error("Bill calculation failed unexpectedly: dealerId={}", dealerId, ex);
             throw ex;
         }
+    }
+
+    private BillingRepository.ProductPrice runtimeProduct(BillingRequest.ItemRequest item) {
+        if (item.productName() == null || item.productName().isBlank())
+            throw new IllegalArgumentException("Custom product name is required.");
+        if (item.bagSizeKg() == null || item.bagSizeKg().signum() <= 0)
+            throw new IllegalArgumentException("Custom product bag weight must be greater than zero.");
+        if (item.gstRate() == null || item.gstRate().signum() < 0 || item.gstRate().compareTo(HUNDRED) > 0)
+            throw new IllegalArgumentException("Custom product GST rate must be between 0 and 100.");
+        String hsnCode = item.hsnCode() == null || item.hsnCode().isBlank() ? "—" : item.hsnCode().trim();
+        return new BillingRepository.ProductPrice(item.productName().trim(), hsnCode,
+                item.bagSizeKg(), item.gstRate(), item.priceInclGst());
     }
 }
