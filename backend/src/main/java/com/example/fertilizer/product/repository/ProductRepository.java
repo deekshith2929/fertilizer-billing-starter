@@ -43,7 +43,7 @@ public class ProductRepository {
     public List<ProductManagementDto> findProductsForManagement(long dealerId) {
         return jdbc.query("""
                 SELECT p.id, p.dealer_id, p.product_code, p.product_name, p.brand,
-                       p.hsn_code, p.bag_size_kg, p.gst_rate,
+                       p.hsn_code, p.category, p.bag_size_kg, p.gst_rate,
                        dp.default_price_incl_gst, p.active
                 FROM products p
                 LEFT JOIN dealer_product_prices dp
@@ -53,19 +53,19 @@ public class ProductRepository {
                 """, (rs, row) -> new ProductManagementDto(
                 rs.getLong("id"), rs.getLong("dealer_id"), rs.getString("product_code"),
                 rs.getString("product_name"), rs.getString("brand"), rs.getString("hsn_code"),
-                rs.getBigDecimal("bag_size_kg"), rs.getBigDecimal("gst_rate"),
+                rs.getString("category"), rs.getBigDecimal("bag_size_kg"), rs.getBigDecimal("gst_rate"),
                 rs.getBigDecimal("default_price_incl_gst"), rs.getBoolean("active")), dealerId);
     }
 
     public long createProduct(ProductCreateRequest request) {
         Long productId = jdbc.queryForObject("""
                 INSERT INTO products
-                    (dealer_id, product_code, product_name, brand, hsn_code, bag_size_kg, gst_rate)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (dealer_id, product_code, product_name, brand, hsn_code, category, bag_size_kg, gst_rate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """, Long.class, request.dealerId(), request.productCode().trim(),
                 request.productName().trim(), blankToNull(request.brand()), request.hsnCode().trim(),
-                request.bagSizeKg(), request.gstRate());
+                blankToNull(request.category()), request.bagSizeKg(), request.gstRate());
         jdbc.update("""
                 INSERT INTO dealer_product_prices (dealer_id, product_id, default_price_incl_gst)
                 VALUES (?, ?, ?)
@@ -77,10 +77,11 @@ public class ProductRepository {
         int updated = jdbc.update("""
                 UPDATE products
                 SET product_code = ?, product_name = ?, brand = ?, hsn_code = ?,
-                    bag_size_kg = ?, gst_rate = ?
+                    category = ?, bag_size_kg = ?, gst_rate = ?
                 WHERE id = ? AND dealer_id = ? AND active = TRUE
                 """, request.productCode().trim(), request.productName().trim(), blankToNull(request.brand()),
-                request.hsnCode().trim(), request.bagSizeKg(), request.gstRate(), productId, dealerId);
+                request.hsnCode().trim(), blankToNull(request.category()), request.bagSizeKg(),
+                request.gstRate(), productId, dealerId);
         if (updated != 1) return false;
         return upsertProductPrice(dealerId, productId,
                 new ProductPriceUpdateRequest(request.defaultPriceInclGst()));

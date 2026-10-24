@@ -3,7 +3,7 @@ import {API_BASE_URL} from '../api.js';
 
 const API = API_BASE_URL;
 const blankProduct = {
-  productCode: '', productName: '', brand: '', hsnCode: '',
+  productCode: '', productName: '', brand: '', hsnCode: '', category: '',
   bagSizeKg: '', gstRate: '5', defaultPriceInclGst: ''
 };
 
@@ -134,6 +134,7 @@ export default function ProductsPage({user}) {
       productName: product.productName,
       brand: product.brand || '',
       hsnCode: product.hsnCode,
+      category: product.category || '',
       bagSizeKg: String(product.bagSizeKg),
       gstRate: String(product.gstRate),
       defaultPriceInclGst: priceDrafts[product.id] ?? ''
@@ -212,6 +213,7 @@ export default function ProductsPage({user}) {
         <label>Product name<input required maxLength="200" value={form.productName} onChange={e => setForm({...form, productName: e.target.value})}/></label>
         <label>Brand<input maxLength="120" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}/></label>
         <label>HSN code<input required maxLength="20" value={form.hsnCode} onChange={e => setForm({...form, hsnCode: e.target.value})}/></label>
+        <label>Category<input list="product-category-options" maxLength="40" value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="Optional category"/><datalist id="product-category-options"><option value="Fertilizer"/><option value="Pesticide"/></datalist></label>
         <label>Bag weight (kg)<input required type="number" min="0.001" step="0.001" value={form.bagSizeKg} onChange={e => setForm({...form, bagSizeKg: e.target.value})}/></label>
         <label>GST rate (%)<input required type="number" min="0" max="100" step="0.01" value={form.gstRate} onChange={e => setForm({...form, gstRate: e.target.value})}/></label>
         <label>Default price incl. GST (₹)<input required type="number" min="0.01" step="0.01" value={form.defaultPriceInclGst} onChange={e => setForm({...form, defaultPriceInclGst: e.target.value})}/></label>
@@ -222,10 +224,10 @@ export default function ProductsPage({user}) {
     <section className="admin-card">
       <div className="admin-list-heading"><div><h2>Product catalog</h2><p>Deleted products are deactivated and retained in the database.</p></div><span>{products.length} products</span></div>
       {loading ? <p className="admin-help">Loading products…</p> : products.length === 0 ? <p className="admin-help">No products yet. Add a product above.</p> : <div className="admin-table-wrap">
-        <table className="admin-table product-table"><thead><tr><th>Code / Product</th><th>HSN</th><th>Bag (kg)</th><th>GST</th><th>Default price (₹)</th><th>Status</th><th>Actions</th></tr></thead>
+        <table className="admin-table product-table"><thead><tr><th>Code / Product</th><th>Category</th><th>HSN</th><th>Bag (kg)</th><th>GST</th><th>Default price (₹)</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>{products.map(product => <tr key={product.id}>
             <td><strong>{product.productCode}</strong><br/>{product.productName}{product.brand && <small className="product-brand">{product.brand}</small>}</td>
-            <td>{product.hsnCode}</td><td>{product.bagSizeKg}</td><td>{product.gstRate}%</td>
+            <td>{product.category || '—'}</td><td>{product.hsnCode}</td><td>{product.bagSizeKg}</td><td>{product.gstRate}%</td>
             <td><form className="product-price-form" onSubmit={e => {e.preventDefault(); savePrice(product);}}>
               <input aria-label={`Default price for ${product.productName}`} type="number" min="0.01" step="0.01" required disabled={!product.active || saving} value={priceDrafts[product.id] ?? ''} onChange={e => setPriceDrafts({...priceDrafts, [product.id]: e.target.value})}/>
               <button type="submit" disabled={!product.active || saving}>Save price</button>

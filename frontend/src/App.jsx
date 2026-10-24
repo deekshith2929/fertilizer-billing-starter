@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import AdminPage from './pages/AdminPage.jsx';
 import ProductsPage from './pages/ProductsPage.jsx';
+import StockPage from './pages/StockPage.jsx';
 import {API_BASE_URL} from './api.js';
 
 const API = API_BASE_URL;
@@ -135,16 +136,19 @@ export default function App() {
     <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}/></label>
     {error && <p className="error-message">{error}</p>}
     <button className="primary-button" disabled={loading}>{loading ? 'Signing in…' : 'Login'}</button>
+    <p className="login-contact">For any queries, contact <a href="mailto:puvvadideekshith2@gmail.com">Puvvadi Deekshith</a> at <a href="mailto:puvvadideekshith2@gmail.com">puvvadideekshith2@gmail.com</a>.</p>
   </form></main>;
 
   return <div className="app-shell">
     <header className="app-header"><div><strong>Fertilizer Billing</strong><small>{user.dealerName} · {user.fullName}</small></div><button className="quiet-button" onClick={logout}>Logout</button></header>
-    <nav className="app-nav"><button className={page === 'billing' ? 'active' : ''} onClick={() => setPage('billing')}>Billing</button>{['ADMIN', 'DEALER'].includes(user.role) && <button className={page === 'products' ? 'active' : ''} onClick={() => setPage('products')}>Products</button>}<span>Stock Report <em>Coming later</em></span><span>Company / Dealer Ledger <em>Coming later</em></span><span>Farmer / Customer Ledger <em>Coming later</em></span>{user.role === 'ADMIN' && <button className={page === 'admin' ? 'active' : ''} onClick={() => setPage('admin')}>Admin</button>}</nav>
+    <nav className="app-nav"><button className={page === 'billing' ? 'active' : ''} onClick={() => setPage('billing')}>Billing</button>{['ADMIN', 'DEALER'].includes(user.role) && <button className={page === 'products' ? 'active' : ''} onClick={() => setPage('products')}>Products</button>}{['ADMIN', 'DEALER'].includes(user.role) ? <button className={page === 'stock' ? 'active' : ''} onClick={() => setPage('stock')}>Stock Report</button> : <span>Stock Report <em>Coming later</em></span>}<span>Company / Dealer Ledger <em>Coming later</em></span><span>Farmer / Customer Ledger <em>Coming later</em></span>{user.role === 'ADMIN' && <button className={page === 'admin' ? 'active' : ''} onClick={() => setPage('admin')}>Admin</button>}</nav>
 
     {page === 'admin' && user.role === 'ADMIN'
       ? <AdminPage user={user}/>
       : page === 'products' && ['ADMIN', 'DEALER'].includes(user.role)
         ? <ProductsPage user={user}/>
+        : page === 'stock' && ['ADMIN', 'DEALER'].includes(user.role)
+          ? <StockPage user={user}/>
         : <>
     <main className="billing-layout">
       <section className="entry-panel">

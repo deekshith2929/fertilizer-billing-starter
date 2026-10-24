@@ -37,7 +37,7 @@ public class ProductManagementService {
         if (!dealerIdEquals(request.dealerId(), dealerId))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only create products for the selected dealer.");
         ProductCreateRequest scopedRequest = new ProductCreateRequest(dealerId, request.productCode(),
-                request.productName(), request.brand(), request.hsnCode(), request.bagSizeKg(),
+                request.productName(), request.brand(), request.hsnCode(), request.category(), request.bagSizeKg(),
                 request.gstRate(), request.defaultPriceInclGst());
         return repository.createProduct(scopedRequest);
     }

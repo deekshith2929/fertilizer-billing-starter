@@ -19,6 +19,8 @@ Users with the `ADMIN` role see the Admin module after login. It supports creati
 
 Users with the `DEALER` or `ADMIN` role can open **Products** to create, edit, restore, and deactivate dealer-specific products, and to insert or update default prices. Dealer users are restricted to their own dealer; admins can select a dealer. Deletion deactivates the product and price instead of removing the database record. Flyway migration V3 gives existing products with dealer prices a dealer-owned catalog row, cloning products when they were priced for multiple dealers.
 
+Dealers and admins can open **Stock Report** to prepare fertilizer and pesticide reports for a date range. Product categories are managed in the product form; existing products are categorized as Fertilizer by Flyway migration V4. Report rows and their opening balances, receipts, and sales are runtime-only and are not saved. Choose **Yes** for Authorized Stamp Required and upload JPG, PNG, or WebP images: the stamp and signature may be selected together, with the signature printed below the stamp, or select the combined stamp-and-signature image by itself. The selected image(s) are included in the PDF and are not stored. Print / Save PDF opens the browser print dialog.
+
 ## Netlify deployment
 The frontend uses `http://localhost:8080/api` in development and defaults to `https://fertilizer-billing-starter.onrender.com/api` in production. In Netlify, set the `VITE_API_BASE_URL` environment variable to `https://fertilizer-billing-starter.onrender.com/api`, then trigger a new deploy; Vite embeds this value at build time. The backend must also allow the exact Netlify site origin through CORS.
 

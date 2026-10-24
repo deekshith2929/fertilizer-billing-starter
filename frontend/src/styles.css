@@ -59,3 +59,49 @@
 .summary-rows b,.summary-rows span{min-width:0;border-bottom:1px solid #8f947f}
 .summary-rows>div:last-child b,.summary-rows>div:last-child span{border-bottom:0}
 .tax-stamp{min-width:0}
+.login-contact{margin:18px 0 0!important;padding-top:14px;border-top:1px solid #e4ebe8;color:#71827e;font-size:12px;line-height:1.5;text-align:center}
+.login-contact a{color:#176c4e;font-weight:700;text-decoration:none}
+.login-contact a:hover{text-decoration:underline}
+ .stock-report-page{display:grid;gap:18px;padding:22px;max-width:1400px;margin:0 auto}
+.stock-screen-heading h1{font-size:24px;margin:7px 0}
+.stock-screen-heading p{font-size:13px;color:#6d7f84;line-height:1.5;max-width:780px;margin:5px 0 0}
+.stock-report-controls form{padding:0}
+.stock-report-types{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;border-bottom:1px solid #e2e9e6}
+.stock-report-types button{border:0;border-bottom:2px solid transparent;background:transparent;color:#61747a;padding:10px 12px;font-size:13px}
+.stock-report-types button.active{border-bottom-color:#176c4e;color:#176c4e;font-weight:700}
+.stock-report-fields{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:12px}
+.stock-report-fields label{display:grid;gap:7px;color:#52666c;font-size:12px;font-weight:700}
+.stock-report-fields input,.stock-report-fields select,.stock-product-entry input,.stock-product-entry select,.stock-quantity-input{width:100%;min-width:0;padding:9px 10px;border:1px solid #cbd8d4;border-radius:5px;background:#fff;color:#1d333b}
+.stock-authorized-image-options{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0;padding:0;border:0}
+.stock-authorized-image-options legend{grid-column:1/-1;margin-bottom:8px;color:#52666c;font-size:12px;font-weight:700}
+.stock-authorized-image-card{display:grid;align-content:start;gap:10px;min-width:0;padding:12px;border:1px solid #dce5e1;border-radius:7px;background:#fff;color:#52666c;font-size:12px}
+.stock-authorized-image-card.selected{border-color:#176c4e;background:#f5faf7;box-shadow:0 0 0 1px #176c4e}
+.stock-authorized-image-card>span{display:flex;align-items:center;gap:7px;font-weight:700}
+.stock-authorized-image-card>span input{width:auto;margin:0;accent-color:#176c4e}
+.stock-authorized-image-card>input[type=file]{width:100%;min-width:0;font-size:11px}
+.stock-authorized-image-card small{color:#71827e;font-weight:400;overflow-wrap:anywhere}
+.stock-list-heading{margin-top:24px}
+.stock-entry-columns,.stock-entry-row{display:grid;grid-template-columns:minmax(190px,2fr) repeat(3,minmax(100px,1fr)) 20px;gap:8px;align-items:center}
+.stock-entry-columns{padding:10px 0 4px;font-size:11px;font-weight:700;color:#74847f}
+.stock-entry-row{padding:7px 0;border-bottom:1px solid #edf1ef}
+.stock-product-entry{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:0}
+.stock-product-entry:has(input){grid-template-columns:1fr 1fr}
+.stock-product-entry select,.stock-product-entry input,.stock-quantity-input{margin:0;font-size:12px}
+.stock-quantity-input{text-align:right;font-variant-numeric:tabular-nums}
+.stock-form-actions{display:flex;justify-content:flex-end;margin-top:18px}
+.stock-report-output{padding:18px;page:stock-report}
+.stock-output-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.stock-output-toolbar h2{font-size:16px;margin:0}
+.stock-report-paper{padding:8px;background:#fff}
+.stock-print-table{width:100%;border-collapse:collapse;table-layout:auto;color:#000;font-family:'Times New Roman',Times,serif;font-size:15px;text-align:center}
+.stock-print-table th,.stock-print-table td{border:1px solid #000;padding:5px 4px;vertical-align:middle}
+.stock-print-table thead tr:nth-child(-n+4) th{font-size:16px;font-weight:700}
+.stock-print-table thead tr:nth-child(1) th,.stock-print-table thead tr:nth-child(2) th{padding:5px}
+.stock-print-table th{font-weight:700;white-space:nowrap}
+.stock-print-table td:nth-child(2){text-align:left}
+.stock-authorized-stamp{display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding:22px 14% 0 0}
+.stock-authorized-image{display:block;max-width:290px;max-height:170px;object-fit:contain}
+.stock-authorized-image.signature{max-width:240px;max-height:100px}
+@media(max-width:760px){.stock-report-page{padding:12px}.stock-report-fields{grid-template-columns:1fr 1fr}.stock-authorized-image-options{grid-template-columns:1fr}.stock-entry-columns,.stock-entry-row{grid-template-columns:minmax(130px,1.6fr) repeat(3,minmax(72px,1fr)) 18px;gap:5px}.stock-entry-columns{font-size:9px}.stock-product-entry:has(input){grid-template-columns:1fr}.stock-print-table{font-size:11px}.stock-print-table th,.stock-print-table td{padding:4px 2px}}
+@media(max-width:480px){.stock-report-fields{grid-template-columns:1fr}.stock-report-types button{flex:1;padding:9px 5px;font-size:11px}.stock-entry-columns,.stock-entry-row{grid-template-columns:minmax(112px,1.4fr) repeat(3,minmax(59px,1fr)) 16px;gap:3px}.stock-entry-row select,.stock-entry-row input{font-size:10px;padding:7px 4px}.stock-entry-columns{font-size:8px}.stock-report-paper{overflow-x:auto}.stock-print-table{min-width:680px}.stock-output-toolbar{align-items:flex-start;flex-direction:column}}
+@media print{@page stock-report{size:A4 landscape;margin:14mm}body{background:#fff!important}.app-header,.app-nav,.stock-screen-heading,.stock-report-controls,.stock-output-toolbar{display:none!important}.stock-report-page{display:block!important;max-width:none!important;margin:0!important;padding:0!important}.stock-report-output{display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}.stock-report-paper{padding:0!important;overflow:visible!important}.stock-print-table{width:100%!important;min-width:0!important;font-size:13pt!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}.stock-print-table th,.stock-print-table td{padding:4px 5px!important;border:1px solid #000!important}.stock-print-table thead tr:nth-child(-n+4) th{font-size:15pt!important}.stock-authorized-stamp{padding:18mm 15% 0 0!important;gap:3mm!important;break-inside:avoid}.stock-authorized-image{max-width:70mm;max-height:40mm}.stock-authorized-image.signature{max-width:60mm;max-height:24mm}}
