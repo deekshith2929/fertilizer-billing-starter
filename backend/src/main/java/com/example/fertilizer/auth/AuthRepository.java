@@ -23,17 +23,29 @@ public class AuthRepository {
                                  ORDER BY CASE WHEN r.role_code = 'ADMIN' THEN 0 ELSE 1 END, r.id
                                  LIMIT 1), 'USER') AS role
                 FROM app_users u
-                JOIN dealers d ON d.id = u.dealer_id AND d.active = TRUE
+                LEFT JOIN dealers d ON d.id = u.dealer_id
                 WHERE u.username = ? AND u.active = TRUE
+                  AND (d.active = TRUE OR (u.dealer_id IS NULL AND EXISTS (
+                      SELECT 1
+                      FROM user_roles ur
+                      JOIN role_permissions rp ON rp.role_id = ur.role_id
+                      JOIN permissions p ON p.id = rp.permission_id
+                      WHERE ur.user_id = u.id AND p.permission_code = 'DEALER_MANAGE'
+                  )))
                 """, (rs, row) -> new AuthenticatedUser(
                 rs.getLong("id"), rs.getString("username"), rs.getString("password_hash"), rs.getString("full_name"),
-                rs.getString("role"), rs.getLong("dealer_id"), rs.getString("dealer_name"),
-                rs.getString("state_code"), rs.getString("agl_no"), rs.getString("pl_no")), username);
-        return users.stream().findFirst();
+                rs.getString("role"), rs.getObject("dealer_id", Long.class), rs.getString("dealer_name"),
+                rs.getString("state_code"), rs.getString("agl_no"), rs.getString("pl_no"), List.of()), username);
+        return users.stream().findFirst().map(user -> new AuthenticatedUser(
+                user.id(), user.username(), user.passwordHash(), user.fullName(), user.role(),
+                user.dealerId(), user.dealerName(), user.stateCode(), user.aglNo(), user.plNo(),
+                findPermissionsForUser(user.id())));
     }
 
-    public boolean isActiveAdmin(long userId) {
-        return findActiveSessionUser(userId).map(user -> "ADMIN".equals(user.role())).orElse(false);
+    public boolean dealerExists(long dealerId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM dealers WHERE id = ? AND active = TRUE)
+                """, Boolean.class, dealerId));
     }
 
     public Optional<SessionUser> findActiveSessionUser(long userId) {
@@ -45,15 +57,38 @@ public class AuthRepository {
                                  ORDER BY CASE WHEN r.role_code = 'ADMIN' THEN 0 ELSE 1 END, r.id
                                  LIMIT 1), 'USER') AS role
                 FROM app_users u
-                JOIN dealers d ON d.id = u.dealer_id AND d.active = TRUE
+                LEFT JOIN dealers d ON d.id = u.dealer_id
                 WHERE u.id = ? AND u.active = TRUE
-                """, (rs, row) -> new SessionUser(rs.getLong("id"), rs.getLong("dealer_id"),
-                rs.getString("role")), userId);
-        return users.stream().findFirst();
+                  AND (d.active = TRUE OR (u.dealer_id IS NULL AND EXISTS (
+                      SELECT 1
+                      FROM user_roles ur
+                      JOIN role_permissions rp ON rp.role_id = ur.role_id
+                      JOIN permissions p ON p.id = rp.permission_id
+                      WHERE ur.user_id = u.id AND p.permission_code = 'DEALER_MANAGE'
+                  )))
+                """, (rs, row) -> new SessionUser(rs.getLong("id"), rs.getObject("dealer_id", Long.class),
+                rs.getString("role"), List.of()), userId);
+        return users.stream().findFirst().map(user -> new SessionUser(
+                user.id(), user.dealerId(), user.role(), findPermissionsForUser(user.id())));
+    }
+
+    private List<String> findPermissionsForUser(long userId) {
+        return jdbc.queryForList("""
+                SELECT DISTINCT p.permission_code
+                FROM user_roles ur
+                JOIN role_permissions rp ON rp.role_id = ur.role_id
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE ur.user_id = ?
+                ORDER BY p.permission_code
+                """, String.class, userId);
     }
 
     public record AuthenticatedUser(Long id, String username, String passwordHash, String fullName,
                                     String role, Long dealerId, String dealerName, String stateCode,
-                                    String aglNo, String plNo) {}
-    public record SessionUser(Long id, Long dealerId, String role) {}
+                                    String aglNo, String plNo, List<String> permissions) {}
+    public record SessionUser(Long id, Long dealerId, String role, List<String> permissions) {
+        public boolean hasPermission(String permissionCode) {
+            return permissions.contains(permissionCode);
+        }
+    }
 }

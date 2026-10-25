@@ -1,6 +1,7 @@
 package com.example.fertilizer.admin;
 
-import com.example.fertilizer.auth.AuthRepository;
+import com.example.fertilizer.auth.AuthorizationService;
+import com.example.fertilizer.auth.AuthRepository.SessionUser;
 import com.example.fertilizer.auth.PasswordHasher;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -24,19 +25,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class AdminController {
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);
     private final AdminRepository repository;
-    private final AuthRepository authRepository;
+    private final AuthorizationService authorizationService;
     private final PasswordHasher passwordHasher;
 
-    public AdminController(AdminRepository repository, AuthRepository authRepository,
+    public AdminController(AdminRepository repository, AuthorizationService authorizationService,
                            PasswordHasher passwordHasher) {
         this.repository = repository;
-        this.authRepository = authRepository;
+        this.authorizationService = authorizationService;
         this.passwordHasher = passwordHasher;
     }
 
     @GetMapping("/dealers")
     public List<AdminRepository.DealerSummary> getDealers(HttpSession session) {
-        requireAdmin(session);
+        authorizationService.requirePermission(session, "DEALER_MANAGE");
         return repository.findActiveDealers();
     }
 
@@ -44,7 +45,7 @@ public class AdminController {
     @Transactional
     public ResponseEntity<AdminRepository.DealerSummary> createDealer(
             @Valid @RequestBody CreateDealerRequest request, HttpSession session) {
-        requireAdmin(session);
+        authorizationService.requirePermission(session, "DEALER_MANAGE");
         long id = repository.createDealer(request);
         AdminRepository.DealerSummary created = repository.findActiveDealers().stream()
                 .filter(dealer -> dealer.id() == id)
@@ -56,57 +57,86 @@ public class AdminController {
 
     @GetMapping("/users")
     public List<AdminRepository.UserSummary> getUsers(HttpSession session) {
-        requireAdmin(session);
-        return repository.findUsers();
+        SessionUser user = authorizationService.requirePermission(session, "USER_MANAGE");
+        return user.hasPermission("DEALER_MANAGE")
+                ? repository.findUsers()
+                : repository.findUsersForDealer(authorizationService.resolveDealerId(user, null));
+    }
+
+    @GetMapping("/roles")
+    public List<AdminRepository.RoleSummary> getRoles(HttpSession session) {
+        SessionUser user = authorizationService.requirePermission(session, "USER_MANAGE");
+        return repository.findRoles(!user.hasPermission("DEALER_MANAGE"));
     }
 
     @PostMapping("/users")
     @Transactional
     public ResponseEntity<AdminRepository.UserSummary> createUser(
             @Valid @RequestBody CreateUserRequest request, HttpSession session) {
-        long adminId = requireAdmin(session);
-        if (!repository.dealerExists(request.dealerId()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an active dealer.");
+        SessionUser user = authorizationService.requirePermission(session, "USER_MANAGE");
+        if (!user.hasPermission("DEALER_MANAGE") && !"EMPLOYEE".equals(request.roleCode()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Dealer user managers can create employee accounts only.");
         if (!repository.roleExists(request.roleCode()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a valid role.");
-        long userId = repository.createUser(request, passwordHasher.hash(request.password()));
-        AdminRepository.UserSummary created = repository.findUsers().stream()
-                .filter(user -> user.id() == userId)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Created user was not returned."));
-        log.info("Admin userId={} created userId={} username={}", adminId, userId, created.username());
+        Long dealerId = "ADMIN".equals(request.roleCode())
+                ? null : authorizationService.resolveDealerId(user, request.dealerId());
+        CreateUserRequest scopedRequest = new CreateUserRequest(request.username(), request.password(),
+                request.fullName(), request.roleCode(), dealerId);
+        long userId = repository.createUser(scopedRequest, passwordHasher.hash(request.password()));
+        AdminRepository.UserSummary created = repository.findUser(userId);
+        log.info("User manager userId={} created userId={} username={}", user.id(), userId, created.username());
         return ResponseEntity.created(URI.create("/api/admin/users/" + userId)).body(created);
+    }
+
+    @PutMapping("/users/{userId}")
+    @Transactional
+    public AdminRepository.UserSummary updateUser(@PathVariable long userId,
+                                                   @Valid @RequestBody UpdateUserRequest request,
+                                                   HttpSession session) {
+        SessionUser editor = authorizationService.requirePermission(session, "USER_MANAGE");
+        if (!editor.hasPermission("DEALER_MANAGE") && !"EMPLOYEE".equals(request.roleCode()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Dealer user managers can assign employee role only.");
+        if (editor.id() == userId || !canManageTargetUser(editor, userId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Managed user was not found.");
+        if (!repository.roleExists(request.roleCode()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a valid role.");
+        if (!repository.updateUser(userId, request.fullName(), request.roleCode()))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Active user was not found.");
+        return repository.findUser(userId);
     }
 
     @PutMapping("/users/{userId}/password")
     public ResponseEntity<Void> updatePassword(@PathVariable long userId,
                                                @Valid @RequestBody UpdatePasswordRequest request,
                                                HttpSession session) {
-        requireAdmin(session);
+        SessionUser editor = authorizationService.requirePermission(session, "USER_MANAGE");
+        if (!canManageTargetUser(editor, userId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Managed user was not found.");
         if (!repository.updatePassword(userId, passwordHasher.hash(request.password())))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Active user was not found.");
-        log.info("Admin updated password for userId={}", userId);
+        log.info("User manager userId={} updated password for userId={}", editor.id(), userId);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/users/{userId}")
     public ResponseEntity<Void> deleteUser(@PathVariable long userId, HttpSession session) {
-        long adminId = requireAdmin(session);
-        if (adminId == userId)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You cannot delete your own admin account.");
+        SessionUser editor = authorizationService.requirePermission(session, "USER_MANAGE");
+        if (editor.id() == userId)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You cannot deactivate your own account.");
+        if (!canManageTargetUser(editor, userId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Managed user was not found.");
         if (!repository.deactivateUser(userId))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Active user was not found.");
-        log.info("Admin deactivated userId={}", userId);
+        log.info("User manager userId={} deactivated userId={}", editor.id(), userId);
         return ResponseEntity.noContent().build();
     }
 
-    private long requireAdmin(HttpSession session) {
-        Object sessionUserId = session.getAttribute("userId");
-        if (!(sessionUserId instanceof Long userId))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Please log in to continue.");
-        if (!authRepository.isActiveAdmin(userId))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access is required.");
-        return userId;
+    private boolean canManageTargetUser(SessionUser editor, long userId) {
+        if (editor.hasPermission("DEALER_MANAGE")) return true;
+        long dealerId = authorizationService.resolveDealerId(editor, null);
+        return repository.userBelongsToDealer(userId, dealerId) && repository.userIsEmployee(userId);
     }
 
     public record CreateDealerRequest(
@@ -128,8 +158,12 @@ public class AdminController {
             @NotBlank @Size(max = 80) String username,
             @NotBlank @Size(min = 8, max = 256) String password,
             @NotBlank @Size(max = 200) String fullName,
-            @NotBlank @Pattern(regexp = "ADMIN|DEALER|EMPLOYEE") String roleCode,
-            @NotNull Long dealerId) {}
+            @NotBlank @Size(max = 40) String roleCode,
+            Long dealerId) {}
+
+    public record UpdateUserRequest(
+            @NotBlank @Size(max = 200) String fullName,
+            @NotBlank @Size(max = 40) String roleCode) {}
 
     public record UpdatePasswordRequest(@NotBlank @Size(min = 8, max = 256) String password) {}
 }

@@ -27,6 +27,8 @@ async function loadAdminDealers() {
 }
 
 export default function ProductsPage({user}) {
+  const canManageAllDealers = user.permissions?.includes('DEALER_MANAGE') || false;
+  const canManagePrices = user.permissions?.includes('DEALER_PRICE_MANAGE') || false;
   const [dealers, setDealers] = useState([]);
   const [dealerId, setDealerId] = useState(String(user.dealerId));
   const [products, setProducts] = useState([]);
@@ -51,7 +53,7 @@ export default function ProductsPage({user}) {
     let mounted = true;
     async function initialize() {
       try {
-        const dealerList = user.role === 'ADMIN'
+        const dealerList = canManageAllDealers
           ? await loadAdminDealers()
           : [{id: user.dealerId, dealerCode: '', displayName: user.dealerName}];
         if (!mounted) return;
@@ -202,7 +204,7 @@ export default function ProductsPage({user}) {
       <h1>Products and prices</h1>
       <p>Manage this dealer’s product catalog and default GST-inclusive prices.</p>
     </header>
-    {user.role === 'ADMIN' && <label className="product-dealer-select">Dealer<select value={dealerId} onChange={e => changeDealer(e.target.value)}>{dealers.map(dealer => <option key={dealer.id} value={dealer.id}>{dealer.displayName}{dealer.dealerCode ? ` (${dealer.dealerCode})` : ''}</option>)}</select></label>}
+    {canManageAllDealers && <label className="product-dealer-select">Dealer<select value={dealerId} onChange={e => changeDealer(e.target.value)}>{dealers.map(dealer => <option key={dealer.id} value={dealer.id}>{dealer.displayName}{dealer.dealerCode ? ` (${dealer.dealerCode})` : ''}</option>)}</select></label>}
     {error && <p className="error-message" role="alert">{error}</p>}
     {notice && <p className="admin-success" role="status">{notice}</p>}
 
@@ -213,11 +215,12 @@ export default function ProductsPage({user}) {
         <label>Product name<input required maxLength="200" value={form.productName} onChange={e => setForm({...form, productName: e.target.value})}/></label>
         <label>Brand<input maxLength="120" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}/></label>
         <label>HSN code<input required maxLength="20" value={form.hsnCode} onChange={e => setForm({...form, hsnCode: e.target.value})}/></label>
-        <label>Category<input list="product-category-options" maxLength="40" value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="Optional category"/><datalist id="product-category-options"><option value="Fertilizer"/><option value="Pesticide"/></datalist></label>
+        <label>Category<input list="product-category-options" maxLength="40" value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="Optional category"/><datalist id="product-category-options"><option value="Fertilizer"/><option value="Pesticide"/><option value="General"/> </datalist></label>
         <label>Bag weight (kg)<input required type="number" min="0.001" step="0.001" value={form.bagSizeKg} onChange={e => setForm({...form, bagSizeKg: e.target.value})}/></label>
         <label>GST rate (%)<input required type="number" min="0" max="100" step="0.01" value={form.gstRate} onChange={e => setForm({...form, gstRate: e.target.value})}/></label>
-        <label>Default price incl. GST (₹)<input required type="number" min="0.01" step="0.01" value={form.defaultPriceInclGst} onChange={e => setForm({...form, defaultPriceInclGst: e.target.value})}/></label>
-        <div className="product-form-actions"><button className="primary-button" disabled={saving || loading}>{saving ? 'Saving…' : editingId == null ? 'Create product' : 'Save changes'}</button>{editingId != null && <button className="quiet-light-button" type="button" disabled={saving} onClick={() => {setEditingId(null); setForm(blankProduct);}}>Cancel</button>}</div>
+        <label>Default price incl. GST (₹)<input required type="number" min="0.01" step="0.01" disabled={!canManagePrices || saving} value={form.defaultPriceInclGst} onChange={e => setForm({...form, defaultPriceInclGst: e.target.value})}/></label>
+        <div className="product-form-actions"><button className="primary-button" disabled={saving || loading || (!canManagePrices && editingId == null)}>{saving ? 'Saving…' : editingId == null ? 'Create product' : 'Save changes'}</button>{editingId != null && <button className="quiet-light-button" type="button" disabled={saving} onClick={() => {setEditingId(null); setForm(blankProduct);}}>Cancel</button>}</div>
+        {!canManagePrices && editingId == null && <p className="admin-help">A user with dealer price management permission must set the initial price when creating a product.</p>}
       </form>
     </section>
 
@@ -229,8 +232,8 @@ export default function ProductsPage({user}) {
             <td><strong>{product.productCode}</strong><br/>{product.productName}{product.brand && <small className="product-brand">{product.brand}</small>}</td>
             <td>{product.category || '—'}</td><td>{product.hsnCode}</td><td>{product.bagSizeKg}</td><td>{product.gstRate}%</td>
             <td><form className="product-price-form" onSubmit={e => {e.preventDefault(); savePrice(product);}}>
-              <input aria-label={`Default price for ${product.productName}`} type="number" min="0.01" step="0.01" required disabled={!product.active || saving} value={priceDrafts[product.id] ?? ''} onChange={e => setPriceDrafts({...priceDrafts, [product.id]: e.target.value})}/>
-              <button type="submit" disabled={!product.active || saving}>Save price</button>
+              <input aria-label={`Default price for ${product.productName}`} type="number" min="0.01" step="0.01" required disabled={!canManagePrices || !product.active || saving} value={priceDrafts[product.id] ?? ''} onChange={e => setPriceDrafts({...priceDrafts, [product.id]: e.target.value})}/>
+              <button type="submit" disabled={!canManagePrices || !product.active || saving}>Save price</button>
             </form></td>
             <td><span className={product.active ? 'admin-active' : 'admin-inactive'}>{product.active ? 'Active' : 'Inactive'}</span></td>
             <td className="product-actions">{product.active ? <><button type="button" disabled={saving} onClick={() => startEditing(product)}>Edit</button><button className="admin-delete" type="button" disabled={saving} onClick={() => deleteProduct(product)}>Delete</button></> : <button type="button" disabled={saving} onClick={() => restoreProduct(product)}>Restore</button>}</td>
