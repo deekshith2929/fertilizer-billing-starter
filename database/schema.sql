@@ -38,3 +38,15 @@ INSERT INTO app_users(username,password_hash,full_name,dealer_id) VALUES('admin'
 INSERT INTO user_roles(user_id,role_id) SELECT u.id,r.id FROM app_users u CROSS JOIN roles r WHERE u.username='admin' AND r.role_code='ADMIN' ON CONFLICT(user_id,role_id) DO NOTHING;
 INSERT INTO products(dealer_id,product_code,product_name,brand,hsn_code,category,bag_size_kg,gst_rate) SELECT d.id,v.code,v.name,'Demo Brand',v.hsn,'Fertilizer',v.bag_size,v.gst FROM dealers d CROSS JOIN (VALUES('DAP-50','DAP 50KG','31053000',50::NUMERIC,5::NUMERIC),('UREA-45','UREA 45KG','31021000',45::NUMERIC,5::NUMERIC),('MOP-50','MOP 50KG','31042000',50::NUMERIC,5::NUMERIC)) v(code,name,hsn,bag_size,gst) WHERE d.dealer_code='DEMO-001' ON CONFLICT(dealer_id,product_code) DO NOTHING;
 INSERT INTO dealer_product_prices(dealer_id,product_id,default_price_incl_gst) SELECT d.id,p.id,v.price FROM dealers d CROSS JOIN (VALUES('DAP-50',1245.00::NUMERIC),('UREA-45',266.00::NUMERIC),('MOP-50',1700.00::NUMERIC)) v(code,price) JOIN products p ON p.dealer_id=d.id AND p.product_code=v.code WHERE d.dealer_code='DEMO-001' ON CONFLICT(dealer_id,product_id) DO NOTHING;
+CREATE TABLE location_captures (
+    id BIGSERIAL PRIMARY KEY,
+    latitude NUMERIC(10, 7) NOT NULL,
+    longitude NUMERIC(10, 7) NOT NULL,
+    accuracy_meters NUMERIC(12, 3) NOT NULL,
+    captured_at TIMESTAMPTZ NOT NULL,
+    comments TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (latitude BETWEEN -90 AND 90),
+    CHECK (longitude BETWEEN -180 AND 180),
+    CHECK (accuracy_meters >= 0)
+);

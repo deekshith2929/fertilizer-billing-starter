@@ -10,6 +10,8 @@ JDK 25, Maven 3.9+, Node.js 20+, PostgreSQL.
 ## Database
 Create `fertilizer_db`, then run `database/schema.sql`. Set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` if needed. Defaults: `jdbc:postgresql://localhost:5432/fertilizer_db`, `fertilizer_app`, `change_me`.
 
+Clients can submit location data with `POST /api/location-captures` using `latitude`, `longitude`, `accuracyMeters`, and ISO-8601 `capturedAt`. Each submission is stored in `location_captures` without user or dealer identifiers; the complete JSON payload is also retained in its `comments` column. Flyway migrations V12  create the table without user/dealer identifiers.
+
 ## Run
 Terminal 1: `cd backend && mvn spring-boot:run`
 Terminal 2: `cd frontend && npm install && npm run dev`
