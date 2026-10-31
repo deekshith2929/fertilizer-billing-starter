@@ -5,6 +5,7 @@ import ProductsPage from './pages/ProductsPage.jsx';
 import StockPage from './pages/StockPage.jsx';
 import CompanyLedgerPage from './pages/CompanyLedgerPage.jsx';
 import CustomerLedgerPage from './pages/CustomerLedgerPage.jsx';
+import DealerPriceListsPage from './pages/DealerPriceListsPage.jsx';
 import {API_BASE_URL} from './api.js';
 
 const API = API_BASE_URL;
@@ -17,11 +18,13 @@ const navigationItems = [
   {page: 'stock', label: 'Stock Report', permissions: ['STOCK_REPORT_VIEW']},
   {page: 'ledger', label: 'Company / Dealer Ledger', permissions: ['COMPANY_LEDGER_VIEW']},
   {page: 'customer-ledger', label: 'Farmer / Customer Ledger', permissions: ['CUSTOMER_LEDGER_VIEW']},
+  {page: 'dealer-price-lists', label: 'Company Price Lists', permissions: ['DEALER_PRICE_LIST_VIEW', 'DEALER_PRICE_LIST_MANAGE'], dealerOnly: true},
   {page: 'admin', label: 'Admin', permissions: ['USER_MANAGE', 'DEALER_MANAGE']}
 ];
 
 const hasPermission = (user, permission) => user.permissions?.includes(permission) || false;
-const canAccessPage = (user, item) => item.permissions.some(permission => hasPermission(user, permission));
+const canAccessPage = (user, item) => (!item.dealerOnly || user.role === 'DEALER')
+  && item.permissions.some(permission => hasPermission(user, permission));
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -185,11 +188,11 @@ export default function App() {
     event?.preventDefault(); setError(''); setLoading(true);
     try {
       const items = activeRows.map(row => {
-        if (!row.bags || Number(row.bags) < 1) throw new Error('Enter bags (at least 1) for each selected product.');
+        if (!row.bags || Number(row.bags) < 1) throw new Error('Enter the number of packs (at least 1) for each selected product.');
         if (!row.price || Number(row.price) <= 0) throw new Error('Enter a valid price for each selected product.');
         if (row.productId === CUSTOM_PRODUCT) {
           if (!row.productName.trim()) throw new Error('Enter a name for each custom product.');
-          if (!row.bagSizeKg || Number(row.bagSizeKg) <= 0) throw new Error('Enter a valid bag weight for each custom product.');
+          if (!row.bagSizeKg || Number(row.bagSizeKg) <= 0) throw new Error('Enter a valid packing size for each custom product.');
           if (row.gstRate === '' || Number(row.gstRate) < 0 || Number(row.gstRate) > 100) throw new Error('Enter a GST rate from 0 to 100 for each custom product.');
           return {
             productId: null, productName: row.productName.trim(), hsnCode: row.hsnCode.trim(),
@@ -283,6 +286,8 @@ export default function App() {
           ? <CompanyLedgerPage user={user}/>
         : activePage === 'customer-ledger'
           ? <CustomerLedgerPage user={user}/>
+        : activePage === 'dealer-price-lists'
+          ? <DealerPriceListsPage user={user}/>
         : activePage === 'billing'
           ? <>
     <main className="billing-layout">
@@ -318,7 +323,7 @@ export default function App() {
             <label>Customer state code <input value={destination} onChange={e => {setDestination(e.target.value); sessionStorage.setItem('billing.destination', e.target.value); setBill(null); setCalculatedBillRequest(null); setCustomerInvoice(null);}} maxLength={2} placeholder={customerSelected && selectedCustomer?.stateCode ? `Customer: ${selectedCustomer.stateCode}` : `Default: ${user.stateCode || 'dealer state'}`}/></label>
           </div>
           <div className="item-list-heading"><h2>Bill items</h2><span>{activeRows.length} selected</span></div>
-          <div className="billing-columns"><span>Product</span><span>Price incl. GST (₹)</span><span>Bags</span><span>Weight (kg)</span><span></span></div>
+          <div className="billing-columns"><span>Product</span><span>Price incl. GST (₹)</span><span>Packs to Buy</span><span>Total Qty. (Kg/Ltr)</span><span></span></div>
           {rows.map((row, index) => {
             const product = products.find(item => String(item.id) === row.productId);
             const customProduct = row.productId === CUSTOM_PRODUCT;
@@ -334,15 +339,15 @@ export default function App() {
                 onRemoveShortcut={() => removeRow(row.id)}
               />
               <input aria-label="Price including GST" type="number" min="0.01" step="0.01" value={row.price} disabled={!selectedProduct} placeholder="Auto price" onChange={e => updateRow(row.id, {price: e.target.value})}/>
-              <input aria-label="Number of bags" type="number" min="1" step="1" value={row.bags} disabled={!selectedProduct} placeholder="Bags" onChange={e => updateRow(row.id, {bags: e.target.value})}/>
+              <input aria-label="Packs to buy" type="number" min="1" step="1" value={row.bags} disabled={!selectedProduct} placeholder="Packs to Buy" onChange={e => updateRow(row.id, {bags: e.target.value})}/>
               <div className="weight-cell">{selectedProduct && row.bags ? money(Number(selectedProduct.bagSizeKg) * Number(row.bags)) : '—'}</div>
               {selectedProduct ? <div className="billing-row-actions"><button type="button" className="duplicate-button" aria-label={`Duplicate ${selectedProduct.productName || 'custom product'}`} onClick={() => duplicateRow(row.id)}>+</button><button type="button" className="remove-button" aria-label="Remove item" onClick={() => removeRow(row.id)}>×</button></div> : <span/>}
-              {product && <small className="product-meta">HSN {product.hsnCode} · {product.bagSizeKg} kg/bag · GST {product.gstRate}% · default ₹{money(product.defaultPriceInclGst)}</small>}
+              {product && <small className="product-meta">HSN {product.hsnCode} · Pack size: {product.bagSizeKg} Kg/Ltr · GST {product.gstRate}% · default ₹{money(product.defaultPriceInclGst)}</small>}
               {customProduct && <>
                 <label className="custom-product-name">Product name<input aria-label="Custom product name" value={row.productName} onChange={e => updateRow(row.id, {productName: e.target.value})} maxLength={200} placeholder="Type product name"/></label>
                 <div className="custom-product-fields">
                   <label>HSN code<input aria-label="Custom product HSN code" value={row.hsnCode} onChange={e => updateRow(row.id, {hsnCode: e.target.value})} maxLength={20} placeholder="Optional"/></label>
-                  <label>Weight per bag (kg)<input aria-label="Custom product bag weight in kilograms" type="number" min="0.001" step="0.001" value={row.bagSizeKg} onChange={e => updateRow(row.id, {bagSizeKg: e.target.value})}/></label>
+                  <label>Packing size (Kg/Ltr)<input aria-label="Custom product packing size in kilograms or liters" type="number" min="0.001" step="0.001" value={row.bagSizeKg} onChange={e => updateRow(row.id, {bagSizeKg: e.target.value})}/></label>
                   <label>GST (%)<input aria-label="Custom product GST rate" type="number" min="0" max="100" step="0.01" value={row.gstRate} onChange={e => updateRow(row.id, {gstRate: e.target.value})}/></label>
                 </div>
               </>}
@@ -356,7 +361,7 @@ export default function App() {
 
       <section className="preview-panel">
         <div className="preview-toolbar"><div><span className="eyebrow">PRINT PREVIEW</span><h2>Generated bill</h2></div><span className="preview-status">{bill ? 'Ready to print' : 'Waiting for calculation'}</span></div>
-        {!bill ? <div className="preview-empty"><div className="preview-empty-icon">₹</div><h3>Your bill will appear here</h3><p>Select one or more products, enter the number of bags and calculate the bill.</p></div> : <article className="invoice-paper" id="invoice-paper">
+        {!bill ? <div className="preview-empty"><div className="preview-empty-icon">₹</div><h3>Your bill will appear here</h3><p>Select one or more products, enter the quantity/bags and calculate the bill.</p></div> : <article className="invoice-paper" id="invoice-paper">
           <div className="invoice-title">Tax Invoice</div>
           <button className="invoice-back" type="button" onClick={() => setBill(null)}>BACK</button>
           <div className="invoice-mode">{bill.billType === 'CREDIT' ? 'Credit Bill' : 'Cash Bill'}</div>
@@ -370,7 +375,7 @@ export default function App() {
             {selectedCustomer.phone && <span>Phone: {selectedCustomer.phone}</span>}
             {selectedCustomer.gstin && <span>GSTIN: {selectedCustomer.gstin}</span>}
           </div>}
-          <table className="invoice-table"><thead><tr><th>S.No.</th><th>Particulars</th><th>HSN<br/>CODE</th><th>No of<br/>Bags</th><th>Qty.</th><th>Rate</th><th>Amount</th></tr></thead>
+          <table className="invoice-table"><thead><tr><th>S.No.</th><th>Particulars</th><th>HSN<br/>CODE</th><th>Packs to<br/>Buy</th><th>Total Qty.<br/>(Kg/Ltr)</th><th>Rate</th><th>Amount</th></tr></thead>
             <tbody>{bill.items.map((item, index) => <tr key={`${item.hsnCode}-${index}`}>
               <td>{index + 1}</td><td className="particular-cell">{item.productName}</td><td>{item.hsnCode}</td><td>{item.bags}</td><td>{money(item.quantityKg)}</td><td>{money(Math.round(Number(item.rateInclGst) / (1 + Number(item.gstRate) / 100)))}</td><td>{money(item.taxableAmount)}</td>
             </tr>)}</tbody>

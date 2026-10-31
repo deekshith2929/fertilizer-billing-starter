@@ -216,7 +216,7 @@ export default function ProductsPage({user}) {
         <label>Brand<input maxLength="120" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}/></label>
         <label>HSN code<input required maxLength="20" value={form.hsnCode} onChange={e => setForm({...form, hsnCode: e.target.value})}/></label>
         <label>Category<input list="product-category-options" maxLength="40" value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="Optional category"/><datalist id="product-category-options"><option value="Fertilizer"/><option value="Pesticide"/><option value="General"/> </datalist></label>
-        <label>Bag weight (kg)<input required type="number" min="0.001" step="0.001" value={form.bagSizeKg} onChange={e => setForm({...form, bagSizeKg: e.target.value})}/></label>
+        <label>Packing size (Kg/Ltr)<input required type="number" min="0.001" step="0.001" value={form.bagSizeKg} onChange={e => setForm({...form, bagSizeKg: e.target.value})}/></label>
         <label>GST rate (%)<input required type="number" min="0" max="100" step="0.01" value={form.gstRate} onChange={e => setForm({...form, gstRate: e.target.value})}/></label>
         <label>Default price incl. GST (₹)<input required type="number" min="0.01" step="0.01" disabled={!canManagePrices || saving} value={form.defaultPriceInclGst} onChange={e => setForm({...form, defaultPriceInclGst: e.target.value})}/></label>
         <div className="product-form-actions"><button className="primary-button" disabled={saving || loading || (!canManagePrices && editingId == null)}>{saving ? 'Saving…' : editingId == null ? 'Create product' : 'Save changes'}</button>{editingId != null && <button className="quiet-light-button" type="button" disabled={saving} onClick={() => {setEditingId(null); setForm(blankProduct);}}>Cancel</button>}</div>
@@ -227,7 +227,7 @@ export default function ProductsPage({user}) {
     <section className="admin-card">
       <div className="admin-list-heading"><div><h2>Product catalog</h2><p>Deleted products are deactivated and retained in the database.</p></div><span>{products.length} products</span></div>
       {loading ? <p className="admin-help">Loading products…</p> : products.length === 0 ? <p className="admin-help">No products yet. Add a product above.</p> : <div className="admin-table-wrap">
-        <table className="admin-table product-table"><thead><tr><th>Code / Product</th><th>Category</th><th>HSN</th><th>Bag (kg)</th><th>GST</th><th>Default price (₹)</th><th>Status</th><th>Actions</th></tr></thead>
+        <table className="admin-table product-table"><thead><tr><th>Code / Product</th><th>Category</th><th>HSN</th><th>Packing size (Kg/Ltr)</th><th>GST</th><th>Default price (₹)</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>{products.map(product => <tr key={product.id}>
             <td><strong>{product.productCode}</strong><br/>{product.productName}{product.brand && <small className="product-brand">{product.brand}</small>}</td>
             <td>{product.category || '—'}</td><td>{product.hsnCode}</td><td>{product.bagSizeKg}</td><td>{product.gstRate}%</td>
