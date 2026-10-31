@@ -16,6 +16,7 @@ const money = value => value == null ? '—' : new Intl.NumberFormat('en-IN', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 }).format(Number(value));
 const dateLabel = value => value || 'Date not provided';
+const matchUnitLabel = item => `${Number(item.matchUnitSize)} ${item.matchUnit}`;
 const localDate = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -143,6 +144,7 @@ export default function DealerPriceListsPage({user}) {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [imports, setImports] = useState([]);
+  const [importsExpanded, setImportsExpanded] = useState(false);
   const [selectedImport, setSelectedImport] = useState(null);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
@@ -151,8 +153,11 @@ export default function DealerPriceListsPage({user}) {
   const [editingDraft, setEditingDraft] = useState(null);
   const [draftForm, setDraftForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
   const [results, setResults] = useState([]);
+  const [unitFilter, setUnitFilter] = useState('');
   const [history, setHistory] = useState(null);
+  const [commentsModal, setCommentsModal] = useState(null);
   const [editingCurrent, setEditingCurrent] = useState(null);
   const [revisionForm, setRevisionForm] = useState(emptyForm);
   const [inventoryPrice, setInventoryPrice] = useState(null);
@@ -333,8 +338,11 @@ export default function DealerPriceListsPage({user}) {
       setCompanies(companyRows);
       setTechnicalNames(technicalNameRows);
       await Promise.all([loadImports(), loadAudit()]);
-      if (search.trim()) {
-        setResults(await request(`items?${new URLSearchParams({search})}`));
+      if (search.trim() || companyFilter) {
+        const params = new URLSearchParams();
+        if (search.trim()) params.set('search', search.trim());
+        if (companyFilter) params.set('companyId', companyFilter);
+        setResults(await request(`items?${params}`));
       }
       setNotice(`Price added for ${created.companyName}. It is now the current price; any previous matching price remains in history.`);
     } catch (exception) {
@@ -427,13 +435,16 @@ export default function DealerPriceListsPage({user}) {
 
   async function excludeSelectedRows() {
     if (!selectedImport || selectedItemIds.length === 0) return;
-    if (!window.confirm(`Exclude ${selectedItemIds.length} selected rows from this report's confirmation? The rows will be retained in the report.`)) return;
+    const itemIds = draftRows.filter(item => selectedItemIds.includes(item.id)
+      && item.reviewStatus !== 'EXCLUDED').map(item => item.id);
+    if (itemIds.length === 0) return;
+    if (!window.confirm(`Exclude ${itemIds.length} selected rows from this report's confirmation? The rows will be retained in the report.`)) return;
     setError('');
     setSaving(true);
     try {
       const updated = await request(`imports/${selectedImport.id}/items/exclude`, {
         method: 'POST',
-        body: JSON.stringify({itemIds: selectedItemIds})
+        body: JSON.stringify({itemIds})
       });
       setSelectedImport(updated);
       setSelectedItemIds([]);
@@ -442,6 +453,31 @@ export default function DealerPriceListsPage({user}) {
       setNotice('Selected rows excluded. They remain in the report but will not become current prices.');
     } catch (exception) {
       setError(exception.message || 'Could not exclude the selected rows.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function includeSelectedRows() {
+    if (!selectedImport || selectedItemIds.length === 0) return;
+    const itemIds = draftRows.filter(item => selectedItemIds.includes(item.id)
+      && item.reviewStatus !== 'READY').map(item => item.id);
+    if (itemIds.length === 0) return;
+    if (!window.confirm(`Include ${itemIds.length} selected rows and mark them ready for confirmation?`)) return;
+    setError('');
+    setSaving(true);
+    try {
+      const updated = await request(`imports/${selectedImport.id}/items/include`, {
+        method: 'POST',
+        body: JSON.stringify({itemIds})
+      });
+      setSelectedImport(updated);
+      setSelectedItemIds([]);
+      setEditingDraft(null);
+      await loadImports();
+      setNotice('Selected rows marked ready for confirmation.');
+    } catch (exception) {
+      setError(exception.message || 'Could not include the selected rows.');
     } finally {
       setSaving(false);
     }
@@ -487,7 +523,11 @@ export default function DealerPriceListsPage({user}) {
     setError('');
     setHistory(null);
     try {
-      setResults(await request(`items?${new URLSearchParams({search})}`));
+      const params = new URLSearchParams();
+      if (search.trim()) params.set('search', search.trim());
+      if (companyFilter) params.set('companyId', companyFilter);
+      setResults(await request(`items?${params}`));
+      setUnitFilter('');
     } catch (exception) {
       setError(exception.message || 'Could not search current prices.');
     }
@@ -499,6 +539,19 @@ export default function DealerPriceListsPage({user}) {
       setHistory({item, rows: await request(`items/${item.id}/history`)});
     } catch (exception) {
       setError(exception.message || 'Could not load price history.');
+    }
+  }
+
+  async function openComments(item) {
+    setError('');
+    setCommentsModal({item, comments: null, loading: true});
+    try {
+      const data = await request(`items/${item.id}/comments`);
+      setCommentsModal(current => current?.item.id === item.id
+        ? {...current, comments: data.comments, loading: false} : current);
+    } catch (exception) {
+      setCommentsModal(current => current?.item.id === item.id ? null : current);
+      setError(exception.message || 'Could not load comments.');
     }
   }
 
@@ -543,7 +596,15 @@ export default function DealerPriceListsPage({user}) {
   const visibleDraftRows = reviewOnly
     ? draftRows.filter(item => item.reviewStatus === 'NEEDS_REVIEW')
     : draftRows;
-  const selectableDraftRows = visibleDraftRows.filter(item => item.reviewStatus !== 'EXCLUDED');
+  const selectedDraftRows = draftRows.filter(item => selectedItemIds.includes(item.id));
+  const selectedNotReadyCount = selectedDraftRows.filter(item => item.reviewStatus !== 'READY').length;
+  const selectedIncludedCount = selectedDraftRows.filter(item => item.reviewStatus !== 'EXCLUDED').length;
+  const unitOptions = [...new Set(results.map(matchUnitLabel))]
+    .sort((left, right) => left.localeCompare(right, undefined, {numeric: true}));
+  const visiblePriceResults = unitFilter
+    ? results.filter(item => matchUnitLabel(item) === unitFilter)
+    : results;
+  const selectableDraftRows = visibleDraftRows;
   const allVisibleRowsSelected = selectableDraftRows.length > 0
     && selectableDraftRows.every(item => selectedItemIds.includes(item.id));
   const includedRows = draftRows.filter(item => item.reviewStatus !== 'EXCLUDED');
@@ -666,7 +727,15 @@ export default function DealerPriceListsPage({user}) {
     </section>
 
     <section className="dealer-price-list-card">
-      <div className="dealer-price-list-section-heading"><div><h2>Price-list imports</h2><p>Rows in review are drafts; they do not affect current-price search until the whole report is confirmed.</p></div></div>
+      <div className="dealer-price-list-section-heading">
+        <div><h2>Price-list imports</h2><p>Rows in review are drafts; they do not affect current-price search until the whole report is confirmed.</p></div>
+        <button type="button" className="dealer-price-list-section-toggle"
+          aria-expanded={importsExpanded} aria-controls="dealer-price-list-imports"
+          onClick={() => setImportsExpanded(value => !value)}>
+          {importsExpanded ? 'Minimize' : 'Maximize'}
+        </button>
+      </div>
+      <div id="dealer-price-list-imports" hidden={!importsExpanded}>
       {imports.length === 0 ? <p className="admin-help">No price lists uploaded yet.</p> : <div className="dealer-price-list-imports">
         {imports.map(item => <article key={item.id} className="dealer-price-list-import">
           <div><strong>{item.companyName}</strong><span>{dateLabel(item.effectiveDate || item.effectivePeriodText)} · {item.sourceFileName || 'Manual revision'}</span></div>
@@ -684,6 +753,7 @@ export default function DealerPriceListsPage({user}) {
           </div>}
         </article>)}
       </div>}
+      </div>
     </section>
 
     {selectedImport && <section ref={reviewSectionRef} className="dealer-price-list-card" tabIndex="-1">
@@ -701,9 +771,12 @@ export default function DealerPriceListsPage({user}) {
           </button>
           {selectedItemIds.length > 0 && <>
             <span>{selectedItemIds.length} selected</span>
-            <button type="button" className="admin-delete" disabled={saving} onClick={excludeSelectedRows}>
-              {saving ? 'Excluding…' : `Exclude selected (${selectedItemIds.length})`}
-            </button>
+            {selectedIncludedCount > 0 && <button type="button" className="admin-delete" disabled={saving} onClick={excludeSelectedRows}>
+              {saving ? 'Excluding…' : `Exclude selected (${selectedIncludedCount})`}
+            </button>}
+            {selectedNotReadyCount > 0 && <button type="button" className="quiet-light-button" disabled={saving} onClick={includeSelectedRows}>
+              {saving ? 'Including…' : `Include selected (${selectedNotReadyCount})`}
+            </button>}
             <button type="button" className="quiet-light-button" onClick={() => setSelectedItemIds([])}>Clear selection</button>
           </>}
         </div>}
@@ -716,8 +789,8 @@ export default function DealerPriceListsPage({user}) {
             <th>Trade name</th><th>Technical name</th><th>Unit</th><th>Ex-GST</th><th>GST</th><th>Incl-GST</th><th>MRP</th><th>Review status</th><th>Notes</th><th>Action</th>
           </tr></thead>
           <tbody>{visibleDraftRows.map(item => <tr key={item.id} className={item.reviewStatus === 'EXCLUDED' ? 'price-list-row-excluded' : ''}>
-            {canManage && <td><input aria-label={`Select ${item.tradeName || item.technicalName || `row ${item.id}`} for exclusion`}
-              type="checkbox" disabled={item.reviewStatus === 'EXCLUDED' || saving}
+            {canManage && <td><input aria-label={`Select ${item.tradeName || item.technicalName || `row ${item.id}`} for bulk action`}
+              type="checkbox" disabled={saving}
               checked={selectedItemIds.includes(item.id)}
               onChange={event => setSelectedItemIds(current => event.target.checked
                 ? [...current, item.id] : current.filter(id => id !== item.id))}/></td>}
@@ -757,14 +830,26 @@ export default function DealerPriceListsPage({user}) {
 
     <section className="dealer-price-list-card">
       <h2>Search current prices</h2>
-      <p>Search by trade or technical name. Results show the latest confirmed price per company and equivalent unit size (for example, 500 ml and 0.5 Ltr match).</p>
+      <p>Search by trade or technical name, then filter by company or unit size. Results show the latest confirmed price per company and equivalent unit size (for example, 500 ml and 0.5 Ltr match).</p>
       <form className="dealer-price-list-search" onSubmit={searchPrices}>
         <input aria-label="Search trade or technical name" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search product name or technical name"/>
+        <label>Company
+          <select aria-label="Filter by company" value={companyFilter} onChange={event => setCompanyFilter(event.target.value)}>
+            <option value="">All companies</option>
+            {companies.map(company => <option key={company.id} value={company.id}>{company.companyName}</option>)}
+          </select>
+        </label>
+        <label>Unit size
+          <select aria-label="Filter by unit size" value={unitFilter} onChange={event => setUnitFilter(event.target.value)}>
+            <option value="">All units</option>
+            {unitOptions.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+          </select>
+        </label>
         <button className="primary-button">Search</button>
       </form>
-      {results.length > 0 && <div className="dealer-price-list-grid-wrap"><table className="dealer-price-list-table">
+      {visiblePriceResults.length > 0 && <div className="dealer-price-list-grid-wrap"><table className="dealer-price-list-table">
         <thead><tr><th>Company</th><th>Trade name</th><th>Technical name</th><th>Unit</th><th>Equivalent size</th><th>Ex-GST</th><th>GST</th><th>Incl-GST</th><th>MRP</th><th>Effective</th><th>Actions</th></tr></thead>
-        <tbody>{results.map(item => <tr key={item.id}>
+        <tbody>{visiblePriceResults.map(item => <tr key={item.id}>
           <td>{item.companyName}</td><td>{item.tradeName || '—'}</td><td>{item.technicalName || '—'}</td>
           <td>{item.unitSize} {item.unit}</td><td>{Number(item.matchUnitSize)} {item.matchUnit}</td>
           <td>{money(item.priceExGstPerUnit)}</td>
@@ -772,13 +857,15 @@ export default function DealerPriceListsPage({user}) {
           <td><strong>{money(item.priceInclGstPerUnit)}</strong></td><td>{money(item.mrpPerUnit)}</td>
           <td>{dateLabel(item.effectiveDate)}</td><td className="dealer-price-list-actions">
             <button type="button" onClick={() => openHistory(item)}>History</button>
+            <button type="button" onClick={() => openComments(item)}>Comments</button>
             {canManage && <button type="button" onClick={() => startRevision(item)}>Edit</button>}
             {canCreateInventoryProduct && <button type="button" disabled={saving}
               onClick={() => startCreateInventoryProduct(item)}>Add to products</button>}
           </td>
         </tr>)}</tbody>
       </table></div>}
-      {search && results.length === 0 && <p className="admin-help">No current prices match this search.</p>}
+      {(search.trim() || companyFilter) && results.length === 0 && <p className="admin-help">No current prices match these filters.</p>}
+      {results.length > 0 && visiblePriceResults.length === 0 && <p className="admin-help">No current prices match this unit size.</p>}
 
       {inventoryPrice && <form className="price-list-item-editor" onSubmit={createInventoryProduct}>
         <h3>Add to dealer product list · {inventoryPrice.tradeName || inventoryPrice.technicalName}</h3>
@@ -842,6 +929,17 @@ export default function DealerPriceListsPage({user}) {
         <button type="button" className="quiet-light-button" onClick={() => setHistory(null)}>Close history</button>
       </div>}
     </section>
+
+    {commentsModal && <div className="dealer-price-list-modal-backdrop">
+      <section className="dealer-price-list-comments-modal" role="dialog" aria-modal="true"
+        aria-labelledby="dealer-price-list-comments-title">
+        <h2 id="dealer-price-list-comments-title">
+          Comments · {commentsModal.item.tradeName || commentsModal.item.technicalName || 'Price item'}
+        </h2>
+        <p>{commentsModal.loading ? 'Loading comments…' : commentsModal.comments || 'No comments available.'}</p>
+        <button type="button" className="quiet-light-button" onClick={() => setCommentsModal(null)}>Close</button>
+      </section>
+    </div>}
 
     <section className="dealer-price-list-card">
       <div className="dealer-price-list-section-heading"><div><h2>Recent audit activity</h2><p>Imports and confirmed price changes for this dealership.</p></div><button type="button" onClick={() => loadAudit().catch(exception => setError(exception.message))}>Refresh</button></div>

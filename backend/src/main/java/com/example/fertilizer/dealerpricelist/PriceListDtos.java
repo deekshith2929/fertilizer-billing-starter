@@ -27,6 +27,8 @@ public final class PriceListDtos {
                            BigDecimal priceInclGstPerUnit, BigDecimal mrpPerUnit,
                            String category, String comments, String sourceReference) {}
 
+    public record ItemCommentsDto(long itemId, String comments) {}
+
     public record AuditDto(long id, long priceListId, Long previousItemId, long newItemId,
                            String companyName, String tradeName, String technicalName,
                            BigDecimal unitSize, String unit, String eventType,

@@ -6,6 +6,7 @@ import com.example.fertilizer.dealerpricelist.PriceListDtos.CompanyDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.HistoryDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.ImportDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.ImportSummaryDto;
+import com.example.fertilizer.dealerpricelist.PriceListDtos.ItemCommentsDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.PriceDto;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -217,18 +218,36 @@ public class DealerPriceListService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Only rows in an import awaiting review can be excluded.");
         }
-        if (itemIds == null || itemIds.isEmpty() || itemIds.size() > 5000) {
-            throw new IllegalArgumentException("Select between 1 and 5000 rows to exclude.");
-        }
-        if (itemIds.stream().anyMatch(java.util.Objects::isNull)
-                || itemIds.stream().distinct().count() != itemIds.size()) {
-            throw new IllegalArgumentException("Selected row IDs must be unique and valid.");
-        }
+        validateBulkItemIds(itemIds);
         if (repository.excludeDraftItems(dealerId, importId, itemIds) != itemIds.size()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Some selected rows are no longer available to exclude. Refresh the report and try again.");
         }
         return getImport(dealerId, importId);
+    }
+
+    @Transactional
+    public ImportDto includeDraftItems(long dealerId, long importId, List<Long> itemIds) {
+        if (!repository.importIsReview(dealerId, importId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Only rows in an import awaiting review can be included.");
+        }
+        validateBulkItemIds(itemIds);
+        if (repository.includeDraftItems(dealerId, importId, itemIds) != itemIds.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Some selected rows are no longer awaiting inclusion. Refresh the report and try again.");
+        }
+        return getImport(dealerId, importId);
+    }
+
+    private void validateBulkItemIds(List<Long> itemIds) {
+        if (itemIds == null || itemIds.isEmpty() || itemIds.size() > 5000) {
+            throw new IllegalArgumentException("Select between 1 and 5000 rows.");
+        }
+        if (itemIds.stream().anyMatch(java.util.Objects::isNull)
+                || itemIds.stream().distinct().count() != itemIds.size()) {
+            throw new IllegalArgumentException("Selected row IDs must be unique and valid.");
+        }
     }
 
     @Transactional
@@ -279,10 +298,11 @@ public class DealerPriceListService {
                 .findFirst().orElseThrow(() -> new IllegalStateException("Cancelled import was not returned."));
     }
 
-    public List<PriceDto> search(long dealerId, String search) {
-        if (search == null || search.isBlank()) return List.of();
-        String normalized = normalizeText(search);
-        return normalized.isBlank() ? List.of() : repository.searchCurrent(dealerId, normalized);
+    public List<PriceDto> search(long dealerId, String search, Long companyId) {
+        String normalized = search == null || search.isBlank() ? null : normalizeText(search);
+        if (normalized != null && normalized.isBlank()) normalized = null;
+        return normalized == null && companyId == null
+                ? List.of() : repository.searchCurrent(dealerId, normalized, companyId);
     }
 
     public List<HistoryDto> history(long dealerId, long itemId) {
@@ -290,6 +310,13 @@ public class DealerPriceListService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Price-list item was not found."));
         return repository.findHistory(dealerId, item);
+    }
+
+    public ItemCommentsDto comments(long dealerId, long itemId) {
+        StoredItem item = repository.findItem(dealerId, itemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Price-list item was not found."));
+        return new ItemCommentsDto(item.id(), item.comments());
     }
 
     @Transactional

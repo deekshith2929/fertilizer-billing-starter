@@ -195,6 +195,28 @@ public class DealerPriceListRepository {
                 """.formatted(placeholders), args);
     }
 
+    public int includeDraftItems(long dealerId, long importId, List<Long> itemIds) {
+        String placeholders = String.join(", ", java.util.Collections.nCopies(itemIds.size(), "?"));
+        Object[] args = new Object[itemIds.size() + 2];
+        args[0] = dealerId;
+        args[1] = importId;
+        for (int index = 0; index < itemIds.size(); index++) args[index + 2] = itemIds.get(index);
+        return jdbc.update("""
+                UPDATE dealer_price_list_items i
+                SET review_status = 'READY',
+                    review_notes = CASE
+                        WHEN i.review_notes = 'Excluded by dealer.' THEN NULL
+                        ELSE REPLACE(i.review_notes, ' Excluded by dealer.', '')
+                    END
+                FROM dealer_price_lists pl
+                WHERE i.dealer_id = ? AND i.price_list_id = ?
+                  AND i.id IN (%s)
+                  AND i.review_status IN ('EXCLUDED', 'NEEDS_REVIEW')
+                  AND pl.dealer_id = i.dealer_id AND pl.id = i.price_list_id
+                  AND pl.status = 'REVIEW'
+                """.formatted(placeholders), args);
+    }
+
     public boolean importIsReview(long dealerId, long importId) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS (
@@ -288,8 +310,8 @@ public class DealerPriceListRepository {
         }
     }
 
-    public List<PriceDto> searchCurrent(long dealerId, String normalizedSearch) {
-        String pattern = "%" + normalizedSearch + "%";
+    public List<PriceDto> searchCurrent(long dealerId, String normalizedSearch, Long companyId) {
+        String pattern = normalizedSearch == null ? null : "%" + normalizedSearch + "%";
         return jdbc.query("""
                 SELECT i.id, c.company_name, pl.effective_date, i.trade_name, i.technical_name,
                        i.unit_size, i.unit, i.match_unit_size, i.match_unit,
@@ -302,10 +324,12 @@ public class DealerPriceListRepository {
                 JOIN dealer_price_list_companies c
                   ON c.dealer_id = i.dealer_id AND c.id = i.company_id
                 WHERE i.dealer_id = ? AND i.is_current = TRUE AND pl.status = 'CONFIRMED'
-                  AND (i.normalized_trade_name LIKE ? OR i.normalized_technical_name LIKE ?)
+                  AND (?::BIGINT IS NULL OR c.id = ?)
+                  AND (?::TEXT IS NULL
+                       OR i.normalized_trade_name LIKE ? OR i.normalized_technical_name LIKE ?)
                 ORDER BY i.technical_name, i.trade_name, i.match_unit_size, c.company_name
                 LIMIT 200
-                """, priceRowMapper, dealerId, pattern, pattern);
+                """, priceRowMapper, dealerId, companyId, companyId, pattern, pattern, pattern);
     }
 
     public List<HistoryDto> findHistory(long dealerId, StoredItem item) {

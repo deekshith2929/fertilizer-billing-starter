@@ -6,6 +6,7 @@ import com.example.fertilizer.dealerpricelist.PriceListDtos.CompanyDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.HistoryDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.ImportDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.ImportSummaryDto;
+import com.example.fertilizer.dealerpricelist.PriceListDtos.ItemCommentsDto;
 import com.example.fertilizer.dealerpricelist.PriceListDtos.PriceDto;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -111,6 +112,14 @@ public class DealerPriceListController {
         return service.excludeDraftItems(user.dealerId(), importId, request.itemIds());
     }
 
+    @PostMapping("/imports/{importId}/items/include")
+    public ImportDto includeDraftItems(@PathVariable long importId,
+                                       @Valid @RequestBody PriceListBulkExcludeRequest request,
+                                       HttpSession session) {
+        var user = requireDealer(session, "DEALER_PRICE_LIST_MANAGE");
+        return service.includeDraftItems(user.dealerId(), importId, request.itemIds());
+    }
+
     @PostMapping("/imports/{importId}/confirm")
     public ImportDto confirmImport(@PathVariable long importId,
                                    @Valid @RequestBody PriceListConfirmRequest request,
@@ -126,8 +135,11 @@ public class DealerPriceListController {
     }
 
     @GetMapping("/items")
-    public List<PriceDto> search(@RequestParam(required = false) String search, HttpSession session) {
-        return service.search(requireDealer(session, "DEALER_PRICE_LIST_VIEW").dealerId(), search);
+    public List<PriceDto> search(@RequestParam(required = false) String search,
+                                 @RequestParam(required = false) Long companyId,
+                                 HttpSession session) {
+        return service.search(requireDealer(session, "DEALER_PRICE_LIST_VIEW").dealerId(),
+                search, companyId);
     }
 
     @PostMapping("/items")
@@ -142,6 +154,11 @@ public class DealerPriceListController {
     @GetMapping("/items/{itemId}/history")
     public List<HistoryDto> history(@PathVariable long itemId, HttpSession session) {
         return service.history(requireDealer(session, "DEALER_PRICE_LIST_VIEW").dealerId(), itemId);
+    }
+
+    @GetMapping("/items/{itemId}/comments")
+    public ItemCommentsDto comments(@PathVariable long itemId, HttpSession session) {
+        return service.comments(requireDealer(session, "DEALER_PRICE_LIST_VIEW").dealerId(), itemId);
     }
 
     @PostMapping("/items/{itemId}/revisions")
