@@ -23,6 +23,7 @@ import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -78,6 +79,70 @@ public class DealerPriceListService {
         }
         instructions.setColumnWidth(0, 16000);
         return workbook;
+    }
+
+    public XSSFWorkbook createSearchExport(long dealerId, String search, Long companyId,
+                                           BigDecimal matchUnitSize, String matchUnit) {
+        List<PriceDto> rows = search(dealerId, search, companyId);
+        if (matchUnitSize != null && matchUnit != null) {
+            rows = rows.stream()
+                    .filter(item -> item.matchUnitSize() != null
+                            && item.matchUnitSize().compareTo(matchUnitSize) == 0
+                            && item.matchUnit() != null
+                            && item.matchUnit().equalsIgnoreCase(matchUnit))
+                    .toList();
+        }
+
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        var sheet = workbook.createSheet("Current Prices");
+        List<String> headers = List.of("Company", "Trade Name", "Technical Name", "Unit",
+                "Equivalent Size", "Ex-GST / Unit", "GST %", "Incl-GST / Unit", "MRP / Unit",
+                "Effective Date");
+        var headerStyle = workbook.createCellStyle();
+        headerStyle.setFillForegroundColor(IndexedColors.DARK_GREEN.getIndex());
+        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        var headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerFont.setColor(IndexedColors.WHITE.getIndex());
+        headerStyle.setFont(headerFont);
+        var numberStyle = workbook.createCellStyle();
+        numberStyle.setDataFormat(workbook.createDataFormat().getFormat("#,##0.00"));
+
+        Row header = sheet.createRow(0);
+        for (int column = 0; column < headers.size(); column++) {
+            var cell = header.createCell(column);
+            cell.setCellValue(headers.get(column));
+            cell.setCellStyle(headerStyle);
+        }
+        for (int index = 0; index < rows.size(); index++) {
+            PriceDto item = rows.get(index);
+            Row row = sheet.createRow(index + 1);
+            row.createCell(0).setCellValue(item.companyName());
+            row.createCell(1).setCellValue(item.tradeName() == null ? "" : item.tradeName());
+            row.createCell(2).setCellValue(item.technicalName() == null ? "" : item.technicalName());
+            row.createCell(3).setCellValue(item.unitSize() + " " + item.unit());
+            row.createCell(4).setCellValue(item.matchUnitSize() + " " + item.matchUnit());
+            setDecimalCell(row, 5, item.priceExGstPerUnit(), numberStyle);
+            setDecimalCell(row, 6, item.gstPercent(), numberStyle);
+            setDecimalCell(row, 7, item.priceInclGstPerUnit(), numberStyle);
+            setDecimalCell(row, 8, item.mrpPerUnit(), numberStyle);
+            row.createCell(9).setCellValue(item.effectiveDate() == null
+                    ? "" : item.effectiveDate().toString());
+        }
+        sheet.createFreezePane(0, 1);
+        sheet.setAutoFilter(new CellRangeAddress(0, rows.size(), 0, headers.size() - 1));
+        int[] widths = {7500, 7000, 9000, 4200, 5200, 5200, 3600, 5600, 4800, 4800};
+        for (int column = 0; column < widths.length; column++) {
+            sheet.setColumnWidth(column, widths[column]);
+        }
+        return workbook;
+    }
+
+    private void setDecimalCell(Row row, int column, BigDecimal value, CellStyle style) {
+        if (value == null) return;
+        var cell = row.createCell(column);
+        cell.setCellValue(value.doubleValue());
+        cell.setCellStyle(style);
     }
 
     public String prompt() {

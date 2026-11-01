@@ -303,6 +303,8 @@
 .dealer-price-list-search label{display:grid;gap:3px;color:#52666c;font-size:11px;font-weight:700}
 .dealer-price-list-search select{min-width:140px}
 .dealer-price-list-search .primary-button{white-space:nowrap}
+.dealer-price-list-export-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;color:#6d7f84;font-size:11px}
+.dealer-price-list-export-toolbar .dealer-price-list-tools{justify-content:flex-end}
 .dealer-price-list-modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:#10252db3}
 .dealer-price-list-comments-modal{display:grid;gap:14px;width:min(520px,100%);padding:20px;border:1px solid #dce5e1;border-radius:8px;background:#fff;box-shadow:0 12px 40px #10252d40}
 .dealer-price-list-comments-modal h2{margin:0;color:#17323d;font-size:18px}
@@ -311,5 +313,27 @@
 .dealer-price-list-audit article{grid-template-columns:minmax(120px,.5fr) minmax(180px,1fr) 2fr;align-items:start;padding:9px;border-bottom:1px solid #e8eeeb;font-size:11px}
 .dealer-price-list-audit article p{margin:0;color:#52666c}
 .dealer-price-list-layout .admin-help{font-size:11px;line-height:1.5}
+.dealer-price-list-mobile-results{display:none}
 @media(max-width:850px){.price-list-editor-grid{grid-template-columns:repeat(2,minmax(120px,1fr))}.dealer-price-list-confirm{grid-template-columns:1fr}.dealer-price-list-import{grid-template-columns:1fr auto}.dealer-price-list-import>span:nth-of-type(2){grid-column:1}.dealer-price-list-import .dealer-price-list-actions{grid-column:2;grid-row:2}.dealer-price-list-company-management .dealer-price-list-import{grid-template-columns:minmax(0,1fr) auto}.dealer-price-list-company-management .dealer-price-list-import>span{grid-column:1}.dealer-price-list-company-management .dealer-price-list-import>button{grid-column:2;grid-row:1 / span 2}}
 @media(max-width:620px){.dealer-price-list-layout{padding:12px;gap:12px}.dealer-price-list-card{padding:13px}.dealer-price-list-upload{align-items:stretch;flex-direction:column}.dealer-price-list-upload .primary-button{width:100%}.dealer-price-list-import{grid-template-columns:1fr auto}.price-list-editor-grid{grid-template-columns:1fr 1fr}.price-list-editor-grid label:has(textarea){grid-column:1/-1}.dealer-price-list-audit article{grid-template-columns:1fr}.dealer-price-list-search{align-items:stretch;flex-direction:column}}
+@media(max-width:700px){
+  .dealer-price-list-desktop-results{display:none}
+  .dealer-price-list-mobile-results{display:grid;gap:10px}
+  .dealer-price-list-result-card{min-width:0;padding:12px;border:1px solid #dce5e1;border-radius:7px;background:#fff}
+  .dealer-price-list-result-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .dealer-price-list-result-heading>div:first-child{display:grid;min-width:0;gap:3px}
+  .dealer-price-list-result-company{color:#176c4e;font-size:13px;overflow-wrap:anywhere}
+  .dealer-price-list-result-product{color:#17323d;font-size:15px;font-weight:700;overflow-wrap:anywhere}
+  .dealer-price-list-result-technical{color:#6d7f84;font-size:11px;overflow-wrap:anywhere}
+  .dealer-price-list-result-price{display:grid;flex:0 0 auto;gap:2px;text-align:right}
+  .dealer-price-list-result-price span{color:#6d7f84;font-size:10px}
+  .dealer-price-list-result-price strong{color:#17323d;font-size:17px;white-space:nowrap}
+  .dealer-price-list-result-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px 6px;margin:12px 0;padding-top:10px;border-top:1px solid #e6ece9}
+  .dealer-price-list-result-details>div{min-width:0}
+  .dealer-price-list-result-details dt{color:#74847f;font-size:10px}
+  .dealer-price-list-result-details dd{margin:2px 0 0;color:#1d333b;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+  .dealer-price-list-result-actions{display:flex;flex-wrap:wrap;gap:6px;padding-top:9px;border-top:1px solid #e6ece9}
+  .dealer-price-list-result-actions button{min-height:34px;padding:6px 9px;border:1px solid #cbd8d4;border-radius:4px;background:#fff;color:#176c4e;font-size:11px;font-weight:700}
+  .dealer-price-list-export-toolbar{align-items:flex-start;flex-direction:column}
+  .dealer-price-list-export-toolbar .dealer-price-list-tools{justify-content:flex-start}
+}

@@ -328,7 +328,7 @@ public class DealerPriceListRepository {
                   AND (?::TEXT IS NULL
                        OR i.normalized_trade_name LIKE ? OR i.normalized_technical_name LIKE ?)
                 ORDER BY i.technical_name, i.trade_name, i.match_unit_size, c.company_name
-                LIMIT 200
+                LIMIT 500
                 """, priceRowMapper, dealerId, companyId, companyId, pattern, pattern, pattern);
     }
 

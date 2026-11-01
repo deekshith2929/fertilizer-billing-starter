@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -148,6 +149,32 @@ public class DealerPriceListController {
                                  HttpSession session) {
         return service.search(requireDealer(session, "DEALER_PRICE_LIST_VIEW").dealerId(),
                 search, companyId);
+    }
+
+    @GetMapping("/items/export.xlsx")
+    public ResponseEntity<byte[]> exportSearch(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long companyId,
+            @RequestParam(required = false) BigDecimal matchUnitSize,
+            @RequestParam(required = false) String matchUnit,
+            HttpSession session) throws IOException {
+        if ((matchUnitSize == null) != (matchUnit == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Both equivalent unit size and unit are required for unit filtering.");
+        }
+        var user = requireDealer(session, "DEALER_PRICE_LIST_VIEW");
+        try (XSSFWorkbook workbook = service.createSearchExport(user.dealerId(), search,
+                companyId, matchUnitSize, matchUnit);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            workbook.write(output);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            ContentDisposition.attachment()
+                                    .filename("company-price-search.xlsx").build().toString())
+                    .body(output.toByteArray());
+        }
     }
 
     @PostMapping("/items")

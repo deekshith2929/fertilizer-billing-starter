@@ -17,6 +17,9 @@ const money = value => value == null ? '—' : new Intl.NumberFormat('en-IN', {
 }).format(Number(value));
 const dateLabel = value => value || 'Date not provided';
 const matchUnitLabel = item => `${Number(item.matchUnitSize)} ${item.matchUnit}`;
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+})[character]);
 const localDate = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -171,6 +174,7 @@ export default function DealerPriceListsPage({user}) {
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
   const [results, setResults] = useState([]);
+  const [searchedFilters, setSearchedFilters] = useState(null);
   const [unitFilter, setUnitFilter] = useState('');
   const [history, setHistory] = useState(null);
   const [commentsModal, setCommentsModal] = useState(null);
@@ -183,6 +187,7 @@ export default function DealerPriceListsPage({user}) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   function updateManualItem(key, value) {
     if (key === 'priceExGstPerUnit' || key === 'priceInclGstPerUnit') {
@@ -247,12 +252,16 @@ export default function DealerPriceListsPage({user}) {
     await Promise.all(refreshes);
   }
 
-  async function refreshCurrentSearch(companyId = companyFilter) {
+  async function refreshCurrentSearch(
+    companyId = searchedFilters?.companyId ?? companyFilter,
+    searchValue = searchedFilters?.search ?? search
+  ) {
     if (!expandedSections.search) return;
     const params = new URLSearchParams();
-    if (search.trim()) params.set('search', search.trim());
+    if (searchValue.trim()) params.set('search', searchValue.trim());
     if (companyId) params.set('companyId', companyId);
     setResults(await request(`items?${params}`));
+    setSearchedFilters({search: searchValue, companyId});
   }
 
   async function toggleSection(section) {
@@ -626,10 +635,94 @@ export default function DealerPriceListsPage({user}) {
       if (search.trim()) params.set('search', search.trim());
       if (companyFilter) params.set('companyId', companyFilter);
       setResults(await request(`items?${params}`));
+      setSearchedFilters({search, companyId: companyFilter});
       setUnitFilter('');
     } catch (exception) {
       setError(exception.message || 'Could not search current prices.');
     }
+  }
+
+  async function exportSearchExcel() {
+    setExportingExcel(true);
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      const filters = searchedFilters || {search, companyId: companyFilter};
+      if (filters.search.trim()) params.set('search', filters.search.trim());
+      if (filters.companyId) params.set('companyId', filters.companyId);
+      if (unitFilter) {
+        const separator = unitFilter.indexOf(' ');
+        if (separator < 1) throw new Error('Could not read the selected equivalent unit filter.');
+        params.set('matchUnitSize', unitFilter.slice(0, separator));
+        params.set('matchUnit', unitFilter.slice(separator + 1));
+      }
+      const response = await fetch(`${API}/items/export.xlsx?${params}`, {credentials: 'include'});
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        const errorBody = contentType.includes('application/json')
+          ? await response.json() : await response.text();
+        throw new Error(typeof errorBody === 'string'
+          ? errorBody : errorBody.message || errorBody.detail || 'Could not export search results.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'company-price-search.xlsx';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (exception) {
+      setError(exception.message || 'Could not export search results to Excel.');
+    } finally {
+      setExportingExcel(false);
+    }
+  }
+
+  function exportSearchPdf() {
+    const rows = visiblePriceResults.slice(0, 500);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setError('The PDF export window was blocked. Allow pop-ups for this site and try again.');
+      return;
+    }
+    const filters = searchedFilters || {search, companyId: companyFilter};
+    const companyName = companies.find(company => String(company.id) === filters.companyId)?.companyName
+      || 'All companies';
+    const tableRows = rows.map(item => `<tr>
+      <td>${escapeHtml(item.companyName)}</td>
+      <td>${escapeHtml(item.tradeName || '—')}</td>
+      <td>${escapeHtml(item.technicalName || '—')}</td>
+      <td>${escapeHtml(`${item.unitSize} ${item.unit}`)}</td>
+      <td>${escapeHtml(matchUnitLabel(item))}</td>
+      <td class="number">${escapeHtml(money(item.priceExGstPerUnit))}</td>
+      <td class="number">${escapeHtml(item.gstPercent == null ? '—' : `${item.gstPercent}%`)}</td>
+      <td class="number">${escapeHtml(money(item.priceInclGstPerUnit))}</td>
+      <td class="number">${escapeHtml(money(item.mrpPerUnit))}</td>
+      <td>${escapeHtml(dateLabel(item.effectiveDate))}</td>
+    </tr>`).join('');
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8">
+      <title>Company price search</title>
+      <style>
+        @page{size:landscape;margin:10mm}
+        body{font:10px Arial,sans-serif;color:#17323d}
+        h1{font-size:18px;margin:0 0 5px}
+        p{font-size:10px;margin:3px 0 12px;color:#52666c}
+        table{width:100%;border-collapse:collapse;table-layout:fixed}
+        th,td{border:1px solid #cbd8d4;padding:5px;text-align:left;overflow-wrap:anywhere}
+        th{background:#e8f1ed}
+        td.number{text-align:right;white-space:nowrap}
+        tr{break-inside:avoid}
+        thead{display:table-header-group}
+      </style></head><body>
+      <h1>Company price search</h1>
+      <p>Product: ${escapeHtml(filters.search.trim() || 'All products')} · Company: ${escapeHtml(companyName)} · Unit: ${escapeHtml(unitFilter || 'All units')}</p>
+      <p>${rows.length} result${rows.length === 1 ? '' : 's'} · Generated ${escapeHtml(new Date().toLocaleString())}</p>
+      <table><thead><tr><th>Company</th><th>Trade name</th><th>Technical name</th><th>Unit</th>
+      <th>Equivalent size</th><th>Ex-GST</th><th>GST</th><th>Incl-GST</th><th>MRP</th>
+      <th>Effective</th></tr></thead><tbody>${tableRows}</tbody></table>
+      <script>window.onload=()=>window.print();</script></body></html>`);
+    printWindow.document.close();
   }
 
   async function openHistory(item) {
@@ -962,7 +1055,18 @@ export default function DealerPriceListsPage({user}) {
         </label>
         <button className="primary-button">Search</button>
       </form>
-      {visiblePriceResults.length > 0 && <div className="dealer-price-list-grid-wrap"><table className="dealer-price-list-table">
+      {visiblePriceResults.length > 0 && <>
+        <div className="dealer-price-list-export-toolbar">
+          <span>Export includes up to 500 matching rows; Actions are omitted.</span>
+          <div className="dealer-price-list-tools">
+            <button type="button" className="quiet-light-button" disabled={exportingExcel}
+              onClick={exportSearchExcel}>
+              {exportingExcel ? 'Preparing Excel…' : 'Export Excel'}
+            </button>
+            <button type="button" className="quiet-light-button" onClick={exportSearchPdf}>Export PDF</button>
+          </div>
+        </div>
+        <div className="dealer-price-list-grid-wrap dealer-price-list-desktop-results"><table className="dealer-price-list-table">
         <thead><tr><th>Company</th><th>Trade name</th><th>Technical name</th><th>Unit</th><th>Equivalent size</th><th>Ex-GST</th><th>GST</th><th>Incl-GST</th><th>MRP</th><th>Effective</th><th>Actions</th></tr></thead>
         <tbody>{visiblePriceResults.map(item => <tr key={item.id}>
           <td>{item.companyName}</td><td>{item.tradeName || '—'}</td><td>{item.technicalName || '—'}</td>
@@ -978,7 +1082,38 @@ export default function DealerPriceListsPage({user}) {
               onClick={() => startCreateInventoryProduct(item)}>Add to products</button>}
           </td>
         </tr>)}</tbody>
-      </table></div>}
+      </table></div>
+        <div className="dealer-price-list-mobile-results">
+          {visiblePriceResults.map(item => <article key={item.id} className="dealer-price-list-result-card">
+            <header className="dealer-price-list-result-heading">
+              <div>
+                <strong className="dealer-price-list-result-company">{item.companyName}</strong>
+                <span className="dealer-price-list-result-product">{item.tradeName || item.technicalName || 'Unnamed product'}</span>
+                {item.tradeName && item.technicalName && <span className="dealer-price-list-result-technical">{item.technicalName}</span>}
+              </div>
+              <div className="dealer-price-list-result-price">
+                <span>Incl. GST</span>
+                <strong>{money(item.priceInclGstPerUnit)}</strong>
+              </div>
+            </header>
+            <dl className="dealer-price-list-result-details">
+              <div><dt>Unit</dt><dd>{item.unitSize} {item.unit}</dd></div>
+              <div><dt>Equivalent</dt><dd>{Number(item.matchUnitSize)} {item.matchUnit}</dd></div>
+              <div><dt>Ex-GST</dt><dd>{money(item.priceExGstPerUnit)}</dd></div>
+              <div><dt>GST</dt><dd>{item.gstPercent == null ? '—' : `${item.gstPercent}%`}</dd></div>
+              <div><dt>MRP</dt><dd>{money(item.mrpPerUnit)}</dd></div>
+              <div><dt>Effective</dt><dd>{dateLabel(item.effectiveDate)}</dd></div>
+            </dl>
+            <div className="dealer-price-list-result-actions">
+              <button type="button" onClick={() => openHistory(item)}>History</button>
+              <button type="button" onClick={() => openComments(item)}>Comments</button>
+              {canManage && <button type="button" onClick={() => startRevision(item)}>Edit</button>}
+              {canCreateInventoryProduct && <button type="button" disabled={saving}
+                onClick={() => startCreateInventoryProduct(item)}>Add to products</button>}
+            </div>
+          </article>)}
+        </div>
+      </>}
       {(search.trim() || companyFilter) && results.length === 0 && <p className="admin-help">No current prices match these filters.</p>}
       {results.length > 0 && visiblePriceResults.length === 0 && <p className="admin-help">No current prices match this unit size.</p>}
 

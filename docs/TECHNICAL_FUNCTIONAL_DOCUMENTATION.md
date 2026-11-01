@@ -149,6 +149,7 @@ Dealer user managers can create, edit, reset passwords for, and deactivate emplo
 - Import lifecycle: `REVIEW` imports can be edited, included/excluded, and confirmed or cancelled. Only confirmed rows marked `READY` can be used as current prices; confirming as history retains the list without changing current values.
 - Row actions expose history, comments (loaded from the item-specific endpoint), editing where permitted, and adding a selected price to the product catalog where the user has the required product permissions.
 - Price-list managers can permanently delete a company and all its associated audit records, items, imports, and company row from the Companies list. This operation is dealer-scoped, transactional, and requires UI confirmation.
+- Current-price search can export the filtered result set to an Excel workbook or a print-ready PDF. Exports omit row actions and are capped at 500 matching rows; PDF export uses the browser print dialog and can be saved as a PDF.
 - Replacing a current price retains history and writes audit data. Uploaded file contents are parsed in memory and not retained; filename and SHA-256 are retained for import identification and duplicate-upload rejection.
 - API base: `/api/dealer-price-lists`. The module is dealer-scoped.
 
@@ -235,13 +236,15 @@ All routes are under `/api`. Routes not listed here are not implied by the page 
 | Admin | `GET/POST /admin/dealers`; `GET /admin/users`; `GET /admin/roles`; `POST /admin/users`; `PUT /admin/users/{userId}`; `PUT /admin/users/{userId}/password`; `DELETE /admin/users/{userId}` |
 | Supplier ledger | `GET/POST /company-ledger/suppliers`; `GET/POST /company-ledger/suppliers/{supplierId}/entries`; `PUT /company-ledger/suppliers/{supplierId}/entries/{entryId}`; `GET /company-ledger/suppliers/{supplierId}/entries/{entryId}/history` |
 | Customer ledger | `GET/POST /customer-ledger/customers`; `GET/POST /customer-ledger/customers/{customerId}/entries`; `POST /customer-ledger/bills`; `GET/PUT /customer-ledger/customers/{customerId}/invoices/{invoiceId}`; `GET /customer-ledger/customers/{customerId}/invoices/{invoiceId}/edits` |
-| Company price lists | `GET /dealer-price-lists/template`, `/prompt`, `/companies`, `/technical-names`, `/imports`, `/imports/{importId}`, `/audit`; `DELETE /dealer-price-lists/companies/{companyId}`; `POST /dealer-price-lists/imports`; `PUT /dealer-price-lists/imports/{importId}/items/{itemId}`; `POST /dealer-price-lists/imports/{importId}/items/exclude`, `/dealer-price-lists/imports/{importId}/items/include`, `/dealer-price-lists/imports/{importId}/confirm`, `/dealer-price-lists/imports/{importId}/cancel`; `GET/POST /dealer-price-lists/items`; `GET /dealer-price-lists/items/{itemId}/history`, `/dealer-price-lists/items/{itemId}/comments`; `POST /dealer-price-lists/items/{itemId}/revisions` |
+| Company price lists | `GET /dealer-price-lists/template`, `/prompt`, `/companies`, `/technical-names`, `/imports`, `/imports/{importId}`, `/audit`; `DELETE /dealer-price-lists/companies/{companyId}`; `POST /dealer-price-lists/imports`; `PUT /dealer-price-lists/imports/{importId}/items/{itemId}`; `POST /dealer-price-lists/imports/{importId}/items/exclude`, `/dealer-price-lists/imports/{importId}/items/include`, `/dealer-price-lists/imports/{importId}/confirm`, `/dealer-price-lists/imports/{importId}/cancel`; `GET/POST /dealer-price-lists/items`; `GET /dealer-price-lists/items/export.xlsx`; `GET /dealer-price-lists/items/{itemId}/history`, `/dealer-price-lists/items/{itemId}/comments`; `POST /dealer-price-lists/items/{itemId}/revisions` |
 | Location capture | `POST /location-captures` |
 
 The Company Price Lists UI also supports:
 
 - `GET /dealer-price-lists/items?search=...&companyId=...` for name/company search.
-- Unit-size matching/filtering is applied to the returned search rows in the frontend.
+- Current-price searches return up to 500 rows; unit-size filtering is applied to those results in the frontend.
+- `GET /dealer-price-lists/items/export.xlsx` exports the same name/company/equivalent-unit filters, with the same 500-row cap. Exported workbooks contain no Actions column.
+- PDF export is generated from the currently filtered results in a print-ready browser window; choose Save as PDF in the print dialog.
 - `GET /dealer-price-lists/items/{itemId}/comments` for comments shown in the row popup.
 
 ## 7. Data retention and behavior summary
