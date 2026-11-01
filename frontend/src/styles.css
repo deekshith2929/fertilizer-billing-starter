@@ -343,3 +343,149 @@
   .dealer-price-list-export-toolbar{align-items:flex-start;flex-direction:column}
   .dealer-price-list-export-toolbar .dealer-price-list-tools{justify-content:flex-start}
 }
+
+:root{
+  color-scheme:light;
+  --agri-forest:#145b43;
+  --agri-forest-deep:#103c32;
+  --agri-leaf:#247a54;
+  --agri-leaf-soft:#e8f2e9;
+  --agri-soil:#b78438;
+  --agri-cream:#f6f7ef;
+  --agri-border:#d5e2d5;
+  --agri-ink:#19392f;
+  --agri-muted:#687d70;
+  background-color:var(--agri-cream);
+  color:var(--agri-ink)
+}
+body{
+  color:var(--agri-ink);
+  background:
+    radial-gradient(ellipse at 8% 8%,#dcebd866 0,transparent 34rem),
+    radial-gradient(ellipse at 95% 35%,#e6ecd466 0,transparent 30rem),
+    linear-gradient(155deg,#f8f8f1 0%,#edf4ed 52%,#f7f5ea 100%);
+  background-attachment:fixed
+}
+.app-header{
+  position:relative;
+  background:linear-gradient(112deg,#103c32 0%,#145b43 58%,#1b6548 100%);
+  border-bottom:3px solid #c39a52;
+  box-shadow:0 4px 16px #173b2c26
+}
+.app-header strong{letter-spacing:.15px}
+.app-header>div:first-child{position:relative;padding-left:39px}
+.app-header>div:first-child:before{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:0;
+  width:29px;
+  height:29px;
+  margin:0;
+  transform:translateY(-50%);
+  border:1px solid #ffffff40;
+  border-radius:50%;
+  background:radial-gradient(ellipse at 50% 78%,#c5d889 0 11%,transparent 12%),
+    linear-gradient(72deg,transparent 47%,#d9e8a8 48% 53%,transparent 54%),
+    linear-gradient(108deg,transparent 47%,#d9e8a8 48% 53%,transparent 54%),
+    #ffffff12;
+  box-shadow:inset 0 0 0 4px #ffffff0a
+}
+.app-nav{
+  position:relative;
+  z-index:1;
+  gap:8px;
+  padding-top:10px;
+  padding-bottom:10px;
+  background:#fbfcf8ed;
+  border-bottom:1px solid var(--agri-border);
+  box-shadow:0 3px 12px #29442d0a;
+  color:var(--agri-muted)
+}
+.app-nav button{
+  padding:8px 11px;
+  border-radius:6px;
+  transition:background-color .16s ease,color .16s ease,box-shadow .16s ease
+}
+.app-nav button:hover{background:var(--agri-leaf-soft);color:var(--agri-forest)}
+.app-nav button.active{
+  color:var(--agri-forest);
+  background:#e9f2e9;
+  box-shadow:inset 0 -2px 0 var(--agri-leaf);
+  font-weight:700
+}
+.app-nav b{color:var(--agri-forest);border-color:var(--agri-leaf)}
+.primary-button,.print-button{
+  background:linear-gradient(135deg,#247a54,#145b43);
+  box-shadow:0 2px 5px #145b4326;
+  transition:transform .15s ease,box-shadow .15s ease,filter .15s ease
+}
+.primary-button:hover:not(:disabled),.print-button:hover{
+  filter:brightness(1.06);
+  box-shadow:0 4px 10px #145b4330;
+  transform:translateY(-1px)
+}
+.quiet-button{border-color:#b4cfb9}
+.quiet-button:hover{background:#ffffff16}
+.quiet-light-button,.password-update button,.product-price-form button,.product-actions button,
+.dealer-price-list-import button,.dealer-price-list-actions button,.dealer-price-list-section-heading>button{
+  transition:background-color .15s ease,border-color .15s ease,color .15s ease
+}
+.quiet-light-button:hover,.password-update button:hover,.product-price-form button:hover,
+.product-actions button:hover,.dealer-price-list-import button:hover,
+.dealer-price-list-actions button:hover,.dealer-price-list-section-heading>button:hover{
+  border-color:#9cbea3;
+  background:#f0f6ee;
+  color:var(--agri-forest)
+}
+.admin-delete:hover:not(:disabled),.invoice-remove-item:hover{
+  background:#fff3ed;
+  border-color:#dfb7a9
+}
+.entry-panel,.preview-panel,.admin-card,.dealer-price-list-card,
+.supplier-ledger-layout .admin-card,.customer-ledger-layout .admin-card{
+  border-color:var(--agri-border);
+  box-shadow:0 5px 18px #24432e0c,0 1px 3px #24432e08
+}
+.admin-card,.dealer-price-list-card,.supplier-ledger-layout .admin-card,
+.customer-ledger-layout .admin-card{border-top:2px solid #c6dcc5}
+.admin-heading h1,.supplier-ledger-heading h1,.customer-ledger-heading h1,
+.dealer-price-list-layout .admin-heading h1{color:var(--agri-forest-deep)}
+.eyebrow{color:#64845c}
+input:not([type=checkbox]):not([type=radio]),select,textarea{
+  accent-color:var(--agri-leaf)
+}
+input:not([type=checkbox]):not([type=radio]):focus,
+select:focus,textarea:focus{
+  border-color:#70a87e!important;
+  outline:3px solid #7eae762b;
+  outline-offset:1px
+}
+button:focus-visible,a:focus-visible{
+  outline:3px solid #c29a52;
+  outline-offset:2px
+}
+.admin-table th,.dealer-price-list-table th{
+  background:#edf4eb;
+  color:#355844
+}
+.admin-table th,.admin-table td{border-color:#dce7da}
+.login-shell{
+  background:
+    radial-gradient(ellipse at 18% 20%,#7b9f4a44 0,transparent 28rem),
+    radial-gradient(ellipse at 90% 85%,#c39a5233 0,transparent 28rem),
+    linear-gradient(135deg,#103c32,#145b43 62%,#274f37)
+}
+.login-card{
+  border:1px solid #ffffffb8;
+  box-shadow:0 20px 55px #071f183d
+}
+.login-card h1{color:var(--agri-forest-deep)}
+.error-message{border-left:3px solid #c65a43}
+.admin-success{border-left:3px solid var(--agri-leaf)}
+.invoice-paper{box-shadow:0 5px 18px #243a2112}
+@media(max-width:620px){
+  .app-header{background:linear-gradient(112deg,#103c32,#145b43)}
+  .app-nav{gap:4px;padding-right:10px;padding-left:10px}
+  .app-nav button{padding:8px 9px}
+}
