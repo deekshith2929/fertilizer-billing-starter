@@ -368,6 +368,14 @@ public class DealerPriceListService {
         return repository.findCompanies(dealerId);
     }
 
+    @Transactional
+    public void deleteCompany(long dealerId, long companyId) {
+        if (!repository.deleteCompany(dealerId, companyId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Price-list company was not found.");
+        }
+    }
+
     public List<String> technicalNames(long dealerId) {
         return repository.findTechnicalNames(dealerId);
     }

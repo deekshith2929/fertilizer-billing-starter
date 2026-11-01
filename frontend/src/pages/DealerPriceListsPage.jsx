@@ -128,6 +128,20 @@ function requestBody(form) {
   };
 }
 
+function CollapsiblePriceSection({id, title, description, expanded, loading, onToggle, children}) {
+  return <section className={`dealer-price-list-card price-list-section-${id}`}>
+    <div className="dealer-price-list-section-heading">
+      <div><h2>{title}</h2>{description && <p>{description}</p>}</div>
+      <button type="button" className="dealer-price-list-section-toggle"
+        aria-expanded={expanded} aria-controls={`dealer-price-list-section-${id}`} onClick={onToggle}>
+        <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+        <span>{loading ? 'Loading…' : expanded ? 'Collapse' : 'Expand'}</span>
+      </button>
+    </div>
+    {expanded && <div id={`dealer-price-list-section-${id}`}>{children}</div>}
+  </section>;
+}
+
 export default function DealerPriceListsPage({user}) {
   const canManage = user.permissions?.includes('DEALER_PRICE_LIST_MANAGE') || false;
   const canCreateInventoryProduct = user.permissions?.includes('PRODUCT_MANAGE')
@@ -144,7 +158,9 @@ export default function DealerPriceListsPage({user}) {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [imports, setImports] = useState([]);
-  const [importsExpanded, setImportsExpanded] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({});
+  const [loadingSections, setLoadingSections] = useState({});
+  const [deletingCompanyId, setDeletingCompanyId] = useState(null);
   const [selectedImport, setSelectedImport] = useState(null);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
@@ -216,28 +232,68 @@ export default function DealerPriceListsPage({user}) {
     setImports(await request('imports'));
   }
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([request('prompt'), request('imports'), request('audit'), request('companies'), request('technical-names')])
-      .then(([promptText, importRows, auditRows, companyRows, technicalNameRows]) => {
-        if (!active) return;
-        setPrompt(promptText);
-        setImports(importRows);
-        setAudit(auditRows);
-        setCompanies(companyRows);
-        setTechnicalNames(technicalNameRows);
-      })
-      .catch(exception => {
-        if (active) setError(exception.message || 'Could not load dealer price lists.');
-      });
-    return () => { active = false; };
-  }, []);
+  async function loadCompanies() {
+    setCompanies(await request('companies'));
+  }
+
+  async function loadTechnicalNames() {
+    setTechnicalNames(await request('technical-names'));
+  }
+
+  async function refreshOpenImportsAndAudit() {
+    const refreshes = [];
+    if (expandedSections.imports) refreshes.push(loadImports());
+    if (expandedSections.audit) refreshes.push(loadAudit());
+    await Promise.all(refreshes);
+  }
+
+  async function refreshCurrentSearch(companyId = companyFilter) {
+    if (!expandedSections.search) return;
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('search', search.trim());
+    if (companyId) params.set('companyId', companyId);
+    setResults(await request(`items?${params}`));
+  }
+
+  async function toggleSection(section) {
+    const expand = !expandedSections[section];
+    setExpandedSections(current => ({...current, [section]: expand}));
+    if (!expand) return;
+    setError('');
+    setLoadingSections(current => ({...current, [section]: true}));
+    try {
+      switch (section) {
+        case 'search':
+        case 'delete-company':
+          await loadCompanies();
+          break;
+        case 'add-price':
+          await Promise.all([loadCompanies(), loadTechnicalNames()]);
+          break;
+        case 'prepare':
+          setPrompt(await request('prompt'));
+          break;
+        case 'imports':
+          await loadImports();
+          break;
+        case 'audit':
+          await loadAudit();
+          break;
+        default:
+          break;
+      }
+    } catch (exception) {
+      setError(exception.message || `Could not load ${section.replace('-', ' ')} data.`);
+    } finally {
+      setLoadingSections(current => ({...current, [section]: false}));
+    }
+  }
 
   useEffect(() => {
     if (reviewSectionRef.current) {
       reviewSectionRef.current?.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
-  }, [selectedImport?.id]);
+  }, [selectedImport?.id, expandedSections.imports]);
 
   async function downloadTemplate() {
     setError('');
@@ -285,7 +341,7 @@ export default function DealerPriceListsPage({user}) {
       setEditingDraft(null);
       setFile(null);
       setFileInputKey(current => current + 1);
-      await loadImports();
+      if (expandedSections.imports) await loadImports();
       setNotice(`Imported ${imported.items.length} rows for review. Current prices have not changed.`);
     } catch (exception) {
       setError(exception.message || 'Could not import the price list.');
@@ -333,17 +389,11 @@ export default function DealerPriceListsPage({user}) {
         inventoryProduct: {...emptyInventoryProduct}
       }));
       manualPriceBasis.current = 'priceExGstPerUnit';
-      const companyRows = await request('companies');
-      const technicalNameRows = await request('technical-names');
-      setCompanies(companyRows);
-      setTechnicalNames(technicalNameRows);
-      await Promise.all([loadImports(), loadAudit()]);
-      if (search.trim() || companyFilter) {
-        const params = new URLSearchParams();
-        if (search.trim()) params.set('search', search.trim());
-        if (companyFilter) params.set('companyId', companyFilter);
-        setResults(await request(`items?${params}`));
+      if (expandedSections['add-price']) {
+        await Promise.all([loadCompanies(), loadTechnicalNames()]);
       }
+      await refreshOpenImportsAndAudit();
+      await refreshCurrentSearch();
       setNotice(`Price added for ${created.companyName}. It is now the current price; any previous matching price remains in history.`);
     } catch (exception) {
       const detail = exception.message || 'Unknown error.';
@@ -425,7 +475,7 @@ export default function DealerPriceListsPage({user}) {
       setSelectedItemIds([]);
       setEditingDraft(null);
       setNotice('Draft row updated. Confirm the full report when all rows are reviewed.');
-      await loadImports();
+      if (expandedSections.imports) await loadImports();
     } catch (exception) {
       setError(exception.message || 'Could not update the draft row.');
     } finally {
@@ -449,7 +499,7 @@ export default function DealerPriceListsPage({user}) {
       setSelectedImport(updated);
       setSelectedItemIds([]);
       setEditingDraft(null);
-      await loadImports();
+      if (expandedSections.imports) await loadImports();
       setNotice('Selected rows excluded. They remain in the report but will not become current prices.');
     } catch (exception) {
       setError(exception.message || 'Could not exclude the selected rows.');
@@ -474,7 +524,7 @@ export default function DealerPriceListsPage({user}) {
       setSelectedImport(updated);
       setSelectedItemIds([]);
       setEditingDraft(null);
-      await loadImports();
+      if (expandedSections.imports) await loadImports();
       setNotice('Selected rows marked ready for confirmation.');
     } catch (exception) {
       setError(exception.message || 'Could not include the selected rows.');
@@ -494,7 +544,8 @@ export default function DealerPriceListsPage({user}) {
         body: JSON.stringify({makeCurrent})
       });
       setSelectedImport(confirmed);
-      await Promise.all([loadImports(), loadAudit()]);
+      await refreshOpenImportsAndAudit();
+      await refreshCurrentSearch();
       setNotice(makeCurrent
         ? 'Price list confirmed. Included rows are now current prices.'
         : 'Price list confirmed as history; current prices were not changed.');
@@ -511,10 +562,58 @@ export default function DealerPriceListsPage({user}) {
     try {
       await request(`imports/${importId}/cancel`, {method: 'POST'});
       if (selectedImport?.id === importId) setSelectedImport(null);
-      await loadImports();
+      if (expandedSections.imports) await loadImports();
       setNotice('Price-list review cancelled.');
     } catch (exception) {
       setError(exception.message || 'Could not cancel this import.');
+    }
+  }
+
+  async function deleteCompany(company) {
+    if (!window.confirm(
+      `Permanently delete ${company.companyName} and all of its price-list imports, price rows, current prices, history, and audit records? This cannot be undone.`
+    )) return;
+    setError('');
+    setNotice('');
+    setDeletingCompanyId(company.id);
+    try {
+      await request(`companies/${company.id}`, {method: 'DELETE'});
+      setCompanies(current => current.filter(item => item.id !== company.id));
+      setImports(current => current.filter(item => item.companyName !== company.companyName));
+      setAudit(current => current.filter(item => item.companyName !== company.companyName));
+      if (expandedSections['add-price']) {
+        try {
+          await loadTechnicalNames();
+        } catch (exception) {
+          setError(`Deleted ${company.companyName}, but product-name suggestions could not be refreshed: ${exception.message}`);
+        }
+      }
+      if (selectedImport?.companyName === company.companyName) {
+        setSelectedImport(null);
+        setSelectedItemIds([]);
+        setEditingDraft(null);
+      }
+      if (history?.item.companyName === company.companyName) setHistory(null);
+      if (commentsModal?.item.companyName === company.companyName) setCommentsModal(null);
+      if (inventoryPrice?.companyName === company.companyName) setInventoryPrice(null);
+      if (editingCurrent?.companyName === company.companyName) setEditingCurrent(null);
+
+      const nextCompanyFilter = String(company.id) === companyFilter ? '' : companyFilter;
+      if (nextCompanyFilter !== companyFilter) setCompanyFilter(nextCompanyFilter);
+      setUnitFilter('');
+      setResults([]);
+      setNotice(`Deleted ${company.companyName} and all associated price-list data.`);
+      if (expandedSections.search) {
+        try {
+          await refreshCurrentSearch(nextCompanyFilter);
+        } catch (exception) {
+          setError(`Deleted ${company.companyName}, but the search results could not be refreshed: ${exception.message}`);
+        }
+      }
+    } catch (exception) {
+      setError(exception.message || `Could not delete ${company.companyName}.`);
+    } finally {
+      setDeletingCompanyId(null);
     }
   }
 
@@ -570,7 +669,10 @@ export default function DealerPriceListsPage({user}) {
         body: JSON.stringify(requestBody(revisionForm))
       });
       setEditingCurrent(null);
-      await Promise.all([searchPrices({preventDefault() {}}), loadAudit()]);
+      const refreshes = [];
+      if (expandedSections.search) refreshes.push(refreshCurrentSearch());
+      if (expandedSections.audit) refreshes.push(loadAudit());
+      await Promise.all(refreshes);
       setNotice('Price updated. The previous confirmed value remains in history.');
     } catch (exception) {
       setError(exception.message || 'Could not save the price revision.');
@@ -631,9 +733,10 @@ export default function DealerPriceListsPage({user}) {
     {error && <p className="error-message" role="alert">{error}</p>}
     {notice && <p className="admin-success" role="status">{notice}</p>}
 
-    {canManage && <section className="dealer-price-list-card">
-      <h2>Add one product price</h2>
-      <p>Add a price directly for an existing or new company. New prices become current without an audit entry; replacing a matching current price keeps it in history and records the change. Price ex-GST and incl-GST calculate each other when GST is entered, and both remain editable.</p>
+    {canManage && <CollapsiblePriceSection id="add-price" title="Add one product price"
+      description="Add a price directly for an existing or new company. New prices become current without an audit entry; replacing a matching current price keeps it in history and records the change. Price ex-GST and incl-GST calculate each other when GST is entered, and both remain editable."
+      expanded={Boolean(expandedSections['add-price'])} loading={Boolean(loadingSections['add-price'])}
+      onToggle={() => toggleSection('add-price')}>
       <form className="price-list-item-editor" onSubmit={addManualPrice}>
         <div className="price-list-editor-grid">
           <label>Company name<input required maxLength="200" list="dealer-price-list-companies"
@@ -709,11 +812,12 @@ export default function DealerPriceListsPage({user}) {
           <button className="primary-button" disabled={saving}>{saving ? 'Saving…' : manualForm.addToInventory ? 'Add price and inventory product' : 'Add as current price'}</button>
         </div>
       </form>
-    </section>}
+    </CollapsiblePriceSection>}
 
-    <section className="dealer-price-list-card">
-      <h2>Prepare a price list</h2>
-      <p>Use the standard template directly, or provide your supplier PDF/image/spreadsheet to an AI tool with the prompt below. Check all extracted unit prices before importing.</p>
+    <CollapsiblePriceSection id="prepare" title="Prepare a price list"
+      description="Use the standard template directly, or provide your supplier PDF/image/spreadsheet to an AI tool with the prompt below. Check all extracted unit prices before importing."
+      expanded={Boolean(expandedSections.prepare)} loading={Boolean(loadingSections.prepare)}
+      onToggle={() => toggleSection('prepare')}>
       <div className="dealer-price-list-tools">
         <button type="button" className="quiet-light-button" onClick={downloadTemplate}>Download Excel template</button>
         <button type="button" className="quiet-light-button" onClick={copyPrompt} disabled={!prompt}>Copy conversion prompt</button>
@@ -724,18 +828,12 @@ export default function DealerPriceListsPage({user}) {
         <label>Completed price-list file<input key={fileInputKey} required type="file" accept=".xlsx,.xls,.csv" onChange={event => setFile(event.target.files?.[0] || null)}/></label>
         <button className="primary-button" disabled={uploading || !file}>{uploading ? 'Importing…' : 'Upload for review'}</button>
       </form>}
-    </section>
+    </CollapsiblePriceSection>
 
-    <section className="dealer-price-list-card">
-      <div className="dealer-price-list-section-heading">
-        <div><h2>Price-list imports</h2><p>Rows in review are drafts; they do not affect current-price search until the whole report is confirmed.</p></div>
-        <button type="button" className="dealer-price-list-section-toggle"
-          aria-expanded={importsExpanded} aria-controls="dealer-price-list-imports"
-          onClick={() => setImportsExpanded(value => !value)}>
-          {importsExpanded ? 'Minimize' : 'Maximize'}
-        </button>
-      </div>
-      <div id="dealer-price-list-imports" hidden={!importsExpanded}>
+    <CollapsiblePriceSection id="imports" title="Price-list imports"
+      description="Rows in review are drafts; they do not affect current-price search until the whole report is confirmed."
+      expanded={Boolean(expandedSections.imports)} loading={Boolean(loadingSections.imports)}
+      onToggle={() => toggleSection('imports')}>
       {imports.length === 0 ? <p className="admin-help">No price lists uploaded yet.</p> : <div className="dealer-price-list-imports">
         {imports.map(item => <article key={item.id} className="dealer-price-list-import">
           <div><strong>{item.companyName}</strong><span>{dateLabel(item.effectiveDate || item.effectivePeriodText)} · {item.sourceFileName || 'Manual revision'}</span></div>
@@ -753,10 +851,26 @@ export default function DealerPriceListsPage({user}) {
           </div>}
         </article>)}
       </div>}
-      </div>
-    </section>
+    </CollapsiblePriceSection>
 
-    {selectedImport && <section ref={reviewSectionRef} className="dealer-price-list-card" tabIndex="-1">
+    {canManage && <CollapsiblePriceSection id="delete-company" title="Delete by company price list"
+      description="Permanently remove a company and its imports, price rows, current prices, history, and audit records."
+      expanded={Boolean(expandedSections['delete-company'])} loading={Boolean(loadingSections['delete-company'])}
+      onToggle={() => toggleSection('delete-company')}>
+      {companies.length === 0 ? <p className="admin-help">No companies to delete.</p> : <div className="dealer-price-list-imports">
+        {companies.map(company => <article key={company.id} className="dealer-price-list-import">
+          <strong>{company.companyName}</strong>
+          <span>All price-list data for this company</span>
+          <button type="button" className="admin-delete"
+            disabled={deletingCompanyId !== null || saving}
+            onClick={() => deleteCompany(company)}>
+            {deletingCompanyId === company.id ? 'Deleting…' : 'Delete company'}
+          </button>
+        </article>)}
+      </div>}
+    </CollapsiblePriceSection>}
+
+    {selectedImport && expandedSections.imports && <section ref={reviewSectionRef} className="dealer-price-list-card price-list-section-import-review" tabIndex="-1">
       <div className="dealer-price-list-section-heading">
         <div><h2>{reviewOnly ? 'Rows needing review:' : 'Price-list rows:'} {selectedImport.companyName}</h2><p>{selectedImport.sourceFileName} · {dateLabel(selectedImport.effectiveDate || selectedImport.effectivePeriodText)} · {reviewOnly ? `${visibleDraftRows.length} of ${draftRows.length} rows need review` : `${draftRows.length} rows`}</p></div>
         <span className={`price-list-status status-${selectedImport.status.toLowerCase()}`}>{selectedImport.status}</span>
@@ -828,9 +942,10 @@ export default function DealerPriceListsPage({user}) {
       </>}
     </section>}
 
-    <section className="dealer-price-list-card">
-      <h2>Search current prices</h2>
-      <p>Search by trade or technical name, then filter by company or unit size. Results show the latest confirmed price per company and equivalent unit size (for example, 500 ml and 0.5 Ltr match).</p>
+    <CollapsiblePriceSection id="search" title="Search current prices"
+      description="Search by trade or technical name, then filter by company or unit size. Results show the latest confirmed price per company and equivalent unit size (for example, 500 ml and 0.5 Ltr match)."
+      expanded={Boolean(expandedSections.search)} loading={Boolean(loadingSections.search)}
+      onToggle={() => toggleSection('search')}>
       <form className="dealer-price-list-search" onSubmit={searchPrices}>
         <input aria-label="Search trade or technical name" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search product name or technical name"/>
         <label>Company
@@ -928,7 +1043,7 @@ export default function DealerPriceListsPage({user}) {
         </table></div>
         <button type="button" className="quiet-light-button" onClick={() => setHistory(null)}>Close history</button>
       </div>}
-    </section>
+    </CollapsiblePriceSection>
 
     {commentsModal && <div className="dealer-price-list-modal-backdrop">
       <section className="dealer-price-list-comments-modal" role="dialog" aria-modal="true"
@@ -941,8 +1056,11 @@ export default function DealerPriceListsPage({user}) {
       </section>
     </div>}
 
-    <section className="dealer-price-list-card">
-      <div className="dealer-price-list-section-heading"><div><h2>Recent audit activity</h2><p>Imports and confirmed price changes for this dealership.</p></div><button type="button" onClick={() => loadAudit().catch(exception => setError(exception.message))}>Refresh</button></div>
+    <CollapsiblePriceSection id="audit" title="Recent audit activity"
+      description="Imports and confirmed price changes for this dealership."
+      expanded={Boolean(expandedSections.audit)} loading={Boolean(loadingSections.audit)}
+      onToggle={() => toggleSection('audit')}>
+      <div className="dealer-price-list-tools"><button type="button" onClick={() => loadAudit().catch(exception => setError(exception.message))}>Refresh</button></div>
       {audit.length === 0 ? <p className="admin-help">No confirmed price-list activity yet.</p> : <div className="dealer-price-list-audit">
         {audit.slice(0, 30).map(entry => <article key={entry.id}>
           <strong>{entry.eventType.replaceAll('_', ' ')} · {entry.companyName}</strong>
@@ -952,6 +1070,6 @@ export default function DealerPriceListsPage({user}) {
           <details><summary>Changed fields</summary><pre>{JSON.stringify(JSON.parse(entry.changedFields), null, 2)}</pre></details>
         </article>)}
       </div>}
-    </section>
+    </CollapsiblePriceSection>
   </main>;
 }

@@ -392,6 +392,45 @@ public class DealerPriceListRepository {
                 dealerId);
     }
 
+    public boolean deleteCompany(long dealerId, long companyId) {
+        List<Long> companyIds = jdbc.query("""
+                SELECT id FROM dealer_price_list_companies
+                WHERE dealer_id = ? AND id = ?
+                FOR UPDATE
+                """, (rs, row) -> rs.getLong("id"), dealerId, companyId);
+        if (companyIds.isEmpty()) return false;
+
+        jdbc.update("""
+                DELETE FROM dealer_price_list_item_audit a
+                WHERE a.dealer_id = ? AND (
+                    a.price_list_id IN (
+                        SELECT id FROM dealer_price_lists
+                        WHERE dealer_id = ? AND company_id = ?
+                    )
+                    OR a.new_item_id IN (
+                        SELECT id FROM dealer_price_list_items
+                        WHERE dealer_id = ? AND company_id = ?
+                    )
+                    OR a.previous_item_id IN (
+                        SELECT id FROM dealer_price_list_items
+                        WHERE dealer_id = ? AND company_id = ?
+                    )
+                )
+                """, dealerId, dealerId, companyId, dealerId, companyId, dealerId, companyId);
+        jdbc.update("""
+                DELETE FROM dealer_price_list_items
+                WHERE dealer_id = ? AND company_id = ?
+                """, dealerId, companyId);
+        jdbc.update("""
+                DELETE FROM dealer_price_lists
+                WHERE dealer_id = ? AND company_id = ?
+                """, dealerId, companyId);
+        return jdbc.update("""
+                DELETE FROM dealer_price_list_companies
+                WHERE dealer_id = ? AND id = ?
+                """, dealerId, companyId) == 1;
+    }
+
     public List<String> findTechnicalNames(long dealerId) {
         return jdbc.query("""
                 SELECT DISTINCT ON (i.normalized_technical_name) i.technical_name

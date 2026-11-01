@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -70,6 +71,13 @@ public class DealerPriceListController {
     @GetMapping("/companies")
     public List<CompanyDto> companies(HttpSession session) {
         return service.companies(requireDealer(session, "DEALER_PRICE_LIST_VIEW").dealerId());
+    }
+
+    @DeleteMapping("/companies/{companyId}")
+    public ResponseEntity<Void> deleteCompany(@PathVariable long companyId, HttpSession session) {
+        var user = requireDealer(session, "DEALER_PRICE_LIST_MANAGE");
+        service.deleteCompany(user.dealerId(), companyId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/technical-names")
