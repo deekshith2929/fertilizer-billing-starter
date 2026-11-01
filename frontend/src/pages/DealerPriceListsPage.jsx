@@ -176,6 +176,7 @@ export default function DealerPriceListsPage({user}) {
   const [results, setResults] = useState([]);
   const [searchedFilters, setSearchedFilters] = useState(null);
   const [unitFilter, setUnitFilter] = useState('');
+  const [mobileResultsView, setMobileResultsView] = useState('cards');
   const [history, setHistory] = useState(null);
   const [commentsModal, setCommentsModal] = useState(null);
   const [editingCurrent, setEditingCurrent] = useState(null);
@@ -1059,6 +1060,12 @@ export default function DealerPriceListsPage({user}) {
         <div className="dealer-price-list-export-toolbar">
           <span>Export includes up to 500 matching rows; Actions are omitted.</span>
           <div className="dealer-price-list-tools">
+            <div className="dealer-price-list-view-toggle" role="group" aria-label="Mobile result view">
+              <button type="button" aria-pressed={mobileResultsView === 'cards'}
+                onClick={() => setMobileResultsView('cards')}>Cards</button>
+              <button type="button" aria-pressed={mobileResultsView === 'table'}
+                onClick={() => setMobileResultsView('table')}>Table</button>
+            </div>
             <button type="button" className="quiet-light-button" disabled={exportingExcel}
               onClick={exportSearchExcel}>
               {exportingExcel ? 'Preparing Excel…' : 'Export Excel'}
@@ -1066,7 +1073,7 @@ export default function DealerPriceListsPage({user}) {
             <button type="button" className="quiet-light-button" onClick={exportSearchPdf}>Export PDF</button>
           </div>
         </div>
-        <div className="dealer-price-list-grid-wrap dealer-price-list-desktop-results"><table className="dealer-price-list-table">
+        <div className={`dealer-price-list-grid-wrap dealer-price-list-desktop-results${mobileResultsView === 'table' ? ' mobile-table-visible' : ''}`}><table className="dealer-price-list-table">
         <thead><tr><th>Company</th><th>Trade name</th><th>Technical name</th><th>Unit</th><th>Equivalent size</th><th>Ex-GST</th><th>GST</th><th>Incl-GST</th><th>MRP</th><th>Effective</th><th>Actions</th></tr></thead>
         <tbody>{visiblePriceResults.map(item => <tr key={item.id}>
           <td>{item.companyName}</td><td>{item.tradeName || '—'}</td><td>{item.technicalName || '—'}</td>
@@ -1083,7 +1090,7 @@ export default function DealerPriceListsPage({user}) {
           </td>
         </tr>)}</tbody>
       </table></div>
-        <div className="dealer-price-list-mobile-results">
+        <div className={`dealer-price-list-mobile-results${mobileResultsView === 'table' ? ' mobile-table-hidden' : ''}`}>
           {visiblePriceResults.map(item => <article key={item.id} className="dealer-price-list-result-card">
             <header className="dealer-price-list-result-heading">
               <div>
