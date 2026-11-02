@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import AdminPage from './pages/AdminPage.jsx';
 import SearchableProductSelect from './components/SearchableProductSelect.jsx';
+import SearchableCustomerSelect from './components/SearchableCustomerSelect.jsx';
 import ProductsPage from './pages/ProductsPage.jsx';
 import StockPage from './pages/StockPage.jsx';
 import CompanyLedgerPage from './pages/CompanyLedgerPage.jsx';
@@ -10,6 +11,7 @@ import {API_BASE_URL} from './api.js';
 
 const API = API_BASE_URL;
 const money = value => new Intl.NumberFormat('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 2}).format(Number(value || 0));
+const wholeRupee = value => money(Math.round(Number(value || 0)));
 const emptyRow = id => ({id, productId: '', productName: '', hsnCode: '', bagSizeKg: '50', gstRate: '5', price: '', bags: ''});
 const CUSTOM_PRODUCT = '__custom__';
 const navigationItems = [
@@ -307,16 +309,18 @@ export default function App() {
               </select>
             </label>
             {customerSelected && <label>Customer
-              <select required value={customerId} disabled={customerLoading || customers.length === 0} onChange={event => {
-                setCustomerId(event.target.value);
-                setBill(null);
-                setCalculatedBillRequest(null);
-                setCustomerInvoice(null);
-              }}>
-                {customers.length === 0
-                  ? <option value="">{customerLoading ? 'Loading customers…' : 'No customers — add one in Customer Ledger'}</option>
-                  : customers.map(customer => <option key={customer.id} value={customer.id}>{customer.customerName}{customer.phone ? ` · ${customer.phone}` : ''}</option>)}
-              </select>
+              <SearchableCustomerSelect
+                customers={customers}
+                value={customerId}
+                ariaLabel="Search and select customer"
+                placeholder={customerLoading ? 'Loading customers…' : 'Search by customer name or phone…'}
+                disabled={customerLoading || customers.length === 0}
+                onChange={value => {
+                  setCustomerId(value);
+                  setBill(null);
+                  setCalculatedBillRequest(null);
+                  setCustomerInvoice(null);
+                }}/>
               {customers.length === 0 && !customerLoading && <small className="customer-select-help">Add a customer from Farmer / Customer Ledger first.</small>}
             </label>}
             <label>Bill type<select value={type} onChange={e => {setType(e.target.value); sessionStorage.setItem('billing.billType', e.target.value); setBill(null); setCalculatedBillRequest(null); setCustomerInvoice(null);}}><option value="CASH">Cash Bill</option><option value="CREDIT">Credit Bill</option></select></label>
@@ -377,10 +381,10 @@ export default function App() {
           </div>}
           <table className="invoice-table"><thead><tr><th>S.No.</th><th>Particulars</th><th>HSN<br/>CODE</th><th>Packs to<br/>Buy</th><th>Total Qty.<br/>(Kg/Ltr)</th><th>Rate</th><th>Amount</th></tr></thead>
             <tbody>{bill.items.map((item, index) => <tr key={`${item.hsnCode}-${index}`}>
-              <td>{index + 1}</td><td className="particular-cell">{item.productName}</td><td>{item.hsnCode}</td><td>{item.bags}</td><td>{money(item.quantityKg)}</td><td>{money(Math.round(Number(item.rateInclGst) / (1 + Number(item.gstRate) / 100)))}</td><td>{money(item.taxableAmount)}</td>
+              <td>{index + 1}</td><td className="particular-cell">{item.productName}</td><td>{item.hsnCode}</td><td>{item.bags}</td><td>{money(item.quantityKg)}</td><td>{money(Math.round(Number(item.rateInclGst) / (1 + Number(item.gstRate) / 100)))}</td><td>{wholeRupee(item.taxableAmount)}</td>
             </tr>)}</tbody>
           </table>
-          <div className="invoice-summary"><div className="summary-rows"><div><b>Net<br/>amount</b><span>{money(bill.taxableTotal)}</span></div>
+          <div className="invoice-summary"><div className="summary-rows"><div><b>Net<br/>amount</b><span>{wholeRupee(bill.taxableTotal)}</span></div>
             {Array.from(new Set(bill.items.map(item => Number(item.gstRate)))).sort((a,b) => a-b).map(rate => {
               const rateLines = bill.items.filter(item => Number(item.gstRate) === rate);
               const cgstAtRate = rateLines.reduce((sum, item) => sum + Number(item.cgst || 0), 0);

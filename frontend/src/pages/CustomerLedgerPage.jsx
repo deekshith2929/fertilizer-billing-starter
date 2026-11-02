@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {API_BASE_URL} from '../api.js';
+import SearchableCustomerSelect from '../components/SearchableCustomerSelect.jsx';
 
 const blankCustomer = {customerName: '', phone: '', email: '', address: '', gstin: '', stateCode: ''};
 const today = () => {
@@ -331,12 +332,16 @@ export default function CustomerLedgerPage({user}) {
           <h2>Customer account</h2>
           {customers.length === 0 ? <p className="admin-help">Add a customer to start recording bills and payments.</p> : <>
             <div className="customer-ledger-toolbar">
-              <label>Customer<select value={customerId} disabled={saving} onChange={event => {
-                setCustomerId(event.target.value);
-                setSelectedInvoice(null);
-              }}>
-                {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.customerName}</option>)}
-              </select></label>
+              <label>Customer<SearchableCustomerSelect
+                customers={customers}
+                value={customerId}
+                ariaLabel="Search and select customer account"
+                placeholder="Search by customer name or phone…"
+                disabled={saving}
+                onChange={value => {
+                  setCustomerId(value);
+                  setSelectedInvoice(null);
+                }}/></label>
               {selectedCustomer && <div className="ledger-balance"><span>Current balance</span><strong>{balanceLabel(selectedCustomer.balance)}</strong></div>}
             </div>
 
